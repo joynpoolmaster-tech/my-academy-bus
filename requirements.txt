@@ -1,0 +1,7 @@
+Flask
+Flask-SQLAlchemy
+Werkzeug
+python-dateutil
+pandas
+openpyxl==3.1.2
+python-dotenv

@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>관리자 - 클래스 관리</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Sans KR', sans-serif; }
+        .admin-sidebar-bg { background-color: #F0F9FF; }
+        .admin-header-bg { background-color: #E0F2FE; }
+        .time-slot-btn { 
+            cursor: pointer; 
+            transition: all 0.2s ease-in-out; 
+            border: 2px solid transparent;
+        }
+        .time-slot-btn.selected { 
+            background-color: #2563EB; 
+            color: white; 
+            font-weight: bold;
+            border-color: #1d4ed8;
+        }
+        .time-slot-btn:hover {
+            border-color: #3b82f6;
+            background-color: #dbeafe;
+        }
+        .time-slot-btn.selected:hover {
+            background-color: #1d4ed8;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex">
+    <!-- 사이드바 -->
+    <div class="admin-sidebar-bg w-64 min-h-screen p-4 hidden md:block">
+        <div class="text-2xl font-bold text-blue-800 mb-8">배차 관리 시스템</div>
+        <nav class="space-y-2">
+            <!-- 마스터 전용 메뉴 -->
+            {% if session.get('role') == 'master' %}
+            <a href="{{ url_for('manage_branches') }}" 
+               class="flex items-center p-3 rounded-lg text-gray-700 hover:bg-blue-100">
+                지점/관리자 관리
+            </a>
+            {% endif %}
+
+            <!-- 관리자 공용 메뉴 -->
+            <a href="{{ url_for('admin_dashboard') }}" 
+               class="flex items-center p-3 rounded-lg text-gray-700 hover:bg-blue-100">
+                대시보드
+            </a>
+            <a href="{{ url_for('manage_students') }}" 
+               class="flex items-center p-3 rounded-lg text-gray-700 hover:bg-blue-100">
+                회원 관리
+            </a>
+            <a href="{{ url_for('manage_classes') }}" 
+               class="flex items-center p-3 rounded-lg text-blue-900 bg-blue-200 font-bold">
+                클래스 관리
+            </a>
+            <a href="{{ url_for('manage_vehicles') }}" 
+               class="flex items-center p-3 rounded-lg text-gray-700 hover:bg-blue-100">
+                기사/차량 관리
+            </a>
+            <a href="{{ url_for('manage_dispatch') }}" 
+               class="flex items-center p-3 rounded-lg text-gray-700 hover:bg-blue-100">
+                배차 관리
+            </a>
+        </nav>
+    </div>
+
+    <!-- 메인 컨텐츠 -->
+    <div class="flex-1 flex flex-col">
+        <header class="admin-header-bg p-4 flex justify-between items-center shadow-md">
+            <h2 class="text-xl font-bold text-blue-800">클래스 및 시간대 관리</h2>
+            <div>
+                <span class="mr-4">{{ session.get('user_name') }}님 
+                    {% if current_user.role != 'master' and current_user.managed_branch %}
+                    ({{ current_user.managed_branch.name }})
+                    {% endif %}
+                </span>
+                <a href="{{ url_for('logout') }}" class="bg-white text-blue-600 px-4 py-2 rounded-lg shadow hover:bg-gray-100">로그아웃</a>
+            </div>
+        </header>
+        
+        <main class="flex-1 p-6">
+            <!-- Flash 메시지 표시 -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+              {% if messages %}
+                {% for category, message in messages %}
+                  <div class="mb-4 p-4 rounded-md 
+                    {% if category == 'success' %} bg-green-100 text-green-700 
+                    {% elif category == 'danger' %} bg-red-100 text-red-700 
+                    {% elif category == 'warning' %} bg-yellow-100 text-yellow-700
+                    {% else %} bg-blue-100 text-blue-700 {% endif %}"
+                    role="alert">
+                    {{ message }}
+                  </div>
+                {% endfor %}
+              {% endif %}
+            {% endwith %}
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="lg:col-span-1 bg-white p-6 rounded-lg shadow-md">
+                    <h3 class="font-bold text-lg mb-4">새 클래스 추가</h3>
+                    <form method="POST" action="{{ url_for('manage_classes') }}" id="class-form">
+                        <input type="hidden" name="time_slots" id="selected-times-input">
+                        <div class="space-y-4">
+                            <!-- 🔹 지점 선택 필드 - 권한에 따라 조건부 표시 -->
+                            <div>
+                                <label for="branch_id" class="block text-sm font-medium text-gray-700">소속 지점</label>
+                                {% if current_user.role == 'master' %}
+                                <!-- 마스터는 모든 지점 선택 가능 -->
+                                <select name="branch_id" id="branch_id" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" required>
+                                    <option value="">-- 지점 선택 --</option>
+                                    {% for branch in branches %}
+                                    <option value="{{ branch.id }}">{{ branch.name }}</option>
+                                    {% endfor %}
+                                </select>
+                                {% else %}
+                                <!-- 일반 관리자는 자신의 지점으로 고정 -->
+                                <input type="hidden" name="branch_id" value="{{ current_user.branch_id }}">
+                                <input type="text" value="{{ current_user.managed_branch.name }}" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm bg-gray-100" readonly>
+                                <p class="text-xs text-gray-500 mt-1">귀하는 {{ current_user.managed_branch.name }}의 클래스만 관리할 수 있습니다.</p>
+                                {% endif %}
+                            </div>
+                            
+                            <div>
+                                <label for="class_name" class="block text-sm font-medium text-gray-700">클래스 이름</label>
+                                <input type="text" name="class_name" id="class_name" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" placeholder="예: 성인부 1부" required>
+                            </div>
+                            
+                            <!-- 개선된 시간 선택 섹션 -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">운영 시간대 선택</label>
+                                <p class="text-xs text-gray-500 mb-3">시작 시간을 선택하면 자동으로 종료 시간을 설정할 수 있습니다.</p>
+                                
+                                <!-- 시간 선택 그리드 -->
+                                <div class="grid grid-cols-2 gap-2 mb-4">
+                                    <div>
+                                        <label class="block text-xs font-medium text-gray-600 mb-1">시작 시간</label>
+                                        <select id="start-time-select" class="w-full text-sm border-gray-300 rounded-md">
+                                            <option value="">시작 시간 선택</option>
+                                            {% for hour in range(6, 23) %}
+                                                <option value="{{ '%02d:00'|format(hour) }}">{{ '%02d:00'|format(hour) }}</option>
+                                                <option value="{{ '%02d:30'|format(hour) }}">{{ '%02d:30'|format(hour) }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium text-gray-600 mb-1">종료 시간</label>
+                                        <select id="end-time-select" class="w-full text-sm border-gray-300 rounded-md" disabled>
+                                            <option value="">종료 시간 선택</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                
+                                <button type="button" id="add-time-slot" class="w-full bg-gray-500 text-white py-2 px-3 rounded-md text-sm hover:bg-gray-600 mb-3" disabled>
+                                    시간대 추가
+                                </button>
+                                
+                                <!-- 선택된 시간대 목록 -->
+                                <div id="selected-time-slots" class="space-y-2">
+                                    <p class="text-xs text-gray-500">선택된 시간대가 여기에 표시됩니다.</p>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label for="durations" class="block text-sm font-medium text-gray-700">수강 가능 기간 (개월, 쉼표로 구분)</label>
+                                <input type="text" name="durations" id="durations" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" placeholder="예: 1, 3, 6, 12" required>
+                            </div>
+                            <div>
+                                <button type="submit" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700">클래스 생성</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                
+                <div class="lg:col-span-2 bg-white p-6 rounded-lg shadow-md">
+                    <h3 class="font-bold text-lg mb-4">
+                        {% if current_user.role == 'master' %}
+                        전체 클래스 목록
+                        {% else %}
+                        {{ current_user.managed_branch.name }} 클래스 목록
+                        {% endif %}
+                    </h3>
+                    <div class="space-y-4">
+                        {% for class_item in classes %}
+                        <div class="border rounded-lg p-4">
+                            <div class="flex justify-between items-center">
+                                <h4 class="font-bold text-md">
+                                    {% if current_user.role == 'master' %}
+                                    {{ class_item.branch.name }} - {{ class_item.name }}
+                                    {% else %}
+                                    {{ class_item.name }}
+                                    {% endif %}
+                                </h4>
+                                <!-- 삭제 권한 체크 추가 -->
+                                {% if current_user.role == 'master' or class_item.branch_id == current_user.branch_id %}
+                                <form method="POST" action="{{ url_for('delete_class', class_id=class_item.id) }}">
+                                    <button type="submit" class="text-red-500 hover:text-red-700 text-sm font-bold" onclick="return confirm('정말로 이 클래스를 삭제하시겠습니까?')">삭제</button>
+                                </form>
+                                {% endif %}
+                            </div>
+                            <div class="mt-2">
+                                <p class="text-xs text-gray-500 mb-1">운영 시간</p>
+                                <div class="flex flex-wrap gap-2">
+                                    {% for slot in class_item.time_slots %}
+                                    <span class="bg-gray-200 text-gray-800 text-sm font-medium px-3 py-1 rounded-full">{{ slot.time }}</span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            <div class="mt-3">
+                                <p class="text-xs text-gray-500 mb-1">수강 기간 옵션</p>
+                                <div class="flex flex-wrap gap-2">
+                                    {% if class_item.durations %}
+                                        {% for duration in class_item.durations.split(',') %}
+                                        <span class="bg-blue-100 text-blue-800 text-sm font-medium px-3 py-1 rounded-full">{{ duration.strip() }}개월</span>
+                                        {% endfor %}
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% else %}
+                        <p class="text-center py-10 text-gray-500">
+                            {% if current_user.role == 'master' %}
+                            생성된 클래스가 없습니다.
+                            {% else %}
+                            {{ current_user.managed_branch.name }}에 생성된 클래스가 없습니다.
+                            {% endif %}
+                        </p>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const startTimeSelect = document.getElementById('start-time-select');
+            const endTimeSelect = document.getElementById('end-time-select');
+            const addTimeSlotBtn = document.getElementById('add-time-slot');
+            const selectedTimeSlotsDiv = document.getElementById('selected-time-slots');
+            const selectedTimesInput = document.getElementById('selected-times-input');
+            const classForm = document.getElementById('class-form');
+            
+            let selectedTimeSlots = [];
+
+            // 시간을 분으로 변환하는 함수
+            function timeToMinutes(timeStr) {
+                const [hours, minutes] = timeStr.split(':').map(Number);
+                return hours * 60 + minutes;
+            }
+
+            // 분을 시간으로 변환하는 함수
+            function minutesToTime(minutes) {
+                const hours = Math.floor(minutes / 60);
+                const mins = minutes % 60;
+                return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+            }
+
+            // 시작 시간 선택 시 종료 시간 옵션 생성
+            startTimeSelect.addEventListener('change', function() {
+                const startTime = this.value;
+                endTimeSelect.innerHTML = '<option value="">종료 시간 선택</option>';
+                
+                if (startTime) {
+                    const startMinutes = timeToMinutes(startTime);
+                    endTimeSelect.disabled = false;
+                    addTimeSlotBtn.disabled = true;
+                    
+                    // 30분, 1시간, 1시간 30분, 2시간, 2시간 30분, 3시간 옵션 제공
+                    const durations = [30, 60, 90, 120, 150, 180];
+                    
+                    durations.forEach(duration => {
+                        const endMinutes = startMinutes + duration;
+                        if (endMinutes <= 23 * 60) { // 23:00까지만
+                            const endTime = minutesToTime(endMinutes);
+                            const option = document.createElement('option');
+                            option.value = endTime;
+                            option.textContent = `${endTime} (${duration/60}시간${duration%60 ? ' '+duration%60+'분' : ''})`;
+                            endTimeSelect.appendChild(option);
+                        }
+                    });
+                } else {
+                    endTimeSelect.disabled = true;
+                    addTimeSlotBtn.disabled = true;
+                }
+            });
+
+            // 종료 시간 선택 시 추가 버튼 활성화
+            endTimeSelect.addEventListener('change', function() {
+                addTimeSlotBtn.disabled = !this.value;
+                if (this.value) {
+                    addTimeSlotBtn.classList.remove('bg-gray-500', 'hover:bg-gray-600');
+                    addTimeSlotBtn.classList.add('bg-green-500', 'hover:bg-green-600');
+                } else {
+                    addTimeSlotBtn.classList.remove('bg-green-500', 'hover:bg-green-600');
+                    addTimeSlotBtn.classList.add('bg-gray-500', 'hover:bg-gray-600');
+                }
+            });
+
+            // 시간대 추가
+            addTimeSlotBtn.addEventListener('click', function() {
+                const startTime = startTimeSelect.value;
+                const endTime = endTimeSelect.value;
+                
+                if (startTime && endTime) {
+                    const timeSlot = `${startTime}~${endTime}`;
+                    
+                    // 중복 확인
+                    if (selectedTimeSlots.includes(timeSlot)) {
+                        alert('이미 추가된 시간대입니다.');
+                        return;
+                    }
+                    
+                    selectedTimeSlots.push(timeSlot);
+                    updateSelectedTimeSlots();
+                    
+                    // 폼 리셋
+                    startTimeSelect.value = '';
+                    endTimeSelect.innerHTML = '<option value="">종료 시간 선택</option>';
+                    endTimeSelect.disabled = true;
+                    addTimeSlotBtn.disabled = true;
+                    addTimeSlotBtn.classList.remove('bg-green-500', 'hover:bg-green-600');
+                    addTimeSlotBtn.classList.add('bg-gray-500', 'hover:bg-gray-600');
+                }
+            });
+
+            // 선택된 시간대 표시 업데이트
+            function updateSelectedTimeSlots() {
+                if (selectedTimeSlots.length === 0) {
+                    selectedTimeSlotsDiv.innerHTML = '<p class="text-xs text-gray-500">선택된 시간대가 여기에 표시됩니다.</p>';
+                } else {
+                    selectedTimeSlotsDiv.innerHTML = selectedTimeSlots.map(timeSlot => `
+                        <div class="flex items-center justify-between bg-blue-50 p-2 rounded-md">
+                            <span class="text-sm font-medium text-blue-800">${timeSlot}</span>
+                            <button type="button" onclick="removeTimeSlot('${timeSlot}')" class="text-red-500 hover:text-red-700 text-sm">
+                                ✕
+                            </button>
+                        </div>
+                    `).join('');
+                }
+            }
+
+            // 시간대 제거 (전역 함수로 등록)
+            window.removeTimeSlot = function(timeSlot) {
+                selectedTimeSlots = selectedTimeSlots.filter(slot => slot !== timeSlot);
+                updateSelectedTimeSlots();
+            };
+
+            // 폼 제출 시 선택된 시간대들을 hidden input에 설정
+            classForm.addEventListener('submit', function(event) {
+                if (selectedTimeSlots.length === 0) {
+                    alert('최소 하나의 시간대를 선택해주세요.');
+                    event.preventDefault();
+                    return;
+                }
+                selectedTimesInput.value = selectedTimeSlots.join(',');
+            });
+        });
+    </script>
+</body>
+</html>

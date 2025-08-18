@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>관리자 - 대시보드</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Sans KR', sans-serif; }
+        .admin-sidebar-bg { background-color: #F0F9FF; }
+        .admin-header-bg { background-color: #E0F2FE; }
+        .admin-card {
+            background-color: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        }
+        .stat-card { transition: transform 0.2s; }
+        .stat-card:hover { transform: translateY(-2px); }
+    </style>
+</head>
+<body class="bg-gray-100 flex">
+
+    <!-- 사이드바 -->
+    <div class="admin-sidebar-bg w-64 min-h-screen p-4 hidden md:block">
+        <div class="text-2xl font-bold text-blue-800 mb-8">
+            {% if session.get('role') == 'master' %}마스터 시스템{% else %}배차 관리 시스템{% endif %}
+        </div>
+        <nav class="space-y-2">
+            <!-- 마스터 전용 메뉴 -->
+            {% if session.get('role') == 'master' %}
+            <a href="{{ url_for('manage_branches') }}" 
+               class="flex items-center p-3 rounded-lg text-gray-700 hover:bg-blue-100">
+                지점/관리자 관리
+            </a>
+            {% endif %}
+
+            <!-- 관리자 공용 메뉴 -->
+            <a href="{{ url_for('admin_dashboard') }}" 
+               class="flex items-center p-3 rounded-lg text-blue-900 bg-blue-200 font-bold">
+                대시보드
+            </a>
+            <a href="{{ url_for('manage_students') }}" 
+               class="flex items-center p-3 rounded-lg text-gray-700 hover:bg-blue-100">
+                회원 관리
+            </a>
+            <a href="{{ url_for('manage_classes') }}" 
+               class="flex items-center p-3 rounded-lg text-gray-700 hover:bg-blue-100">
+                클래스 관리
+            </a>
+            <a href="{{ url_for('manage_vehicles') }}" 
+               class="flex items-center p-3 rounded-lg text-gray-700 hover:bg-blue-100">
+                기사/차량 관리
+            </a>
+            <a href="{{ url_for('manage_dispatch') }}" 
+               class="flex items-center p-3 rounded-lg text-gray-700 hover:bg-blue-100">
+                배차 관리
+            </a>
+        </nav>
+    </div>
+
+    <!-- 메인 컨텐츠 -->
+    <div class="flex-1 flex flex-col">
+        <header class="admin-header-bg p-4 flex justify-between items-center shadow-md">
+            <h2 class="text-xl font-bold text-blue-800">
+                {% if session.get('role') == 'master' %}전체 통계 대시보드{% else %}지점 통계 대시보드{% endif %}
+            </h2>
+            <div>
+                <span class="mr-4">{{ session.get('user_name') }}님</span>
+                <a href="{{ url_for('logout') }}" class="bg-white text-blue-600 px-4 py-2 rounded-lg shadow hover:bg-gray-100">로그아웃</a>
+            </div>
+        </header>
+        
+        <main class="flex-1 p-6">
+            <!-- Flash 메시지 표시 -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+              {% if messages %}
+                {% for category, message in messages %}
+                  <div class="mb-4 p-4 rounded-md 
+                    {% if category == 'success' %} bg-green-100 text-green-700 
+                    {% elif category == 'danger' %} bg-red-100 text-red-700 
+                    {% elif category == 'warning' %} bg-yellow-100 text-yellow-700
+                    {% else %} bg-blue-100 text-blue-700 {% endif %}"
+                    role="alert">
+                    {{ message }}
+                  </div>
+                {% endfor %}
+              {% endif %}
+            {% endwith %}
+
+            <!-- 요약 카드 -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                <div class="admin-card stat-card p-6">
+                    <h3 class="text-gray-500 text-sm font-medium">총 원생 수</h3>
+                    <p class="text-3xl font-bold text-gray-800">{{ stats.total_students }}명</p>
+                    <div class="mt-2 text-sm">
+                        <span class="text-green-600">+{{ stats.new_students_this_month }}명</span>
+                        <span class="text-gray-500">이번 달</span>
+                    </div>
+                </div>
+                <div class="admin-card stat-card p-6">
+                    <h3 class="text-gray-500 text-sm font-medium">이번 달 신규 원생</h3>
+                    <p class="text-3xl font-bold text-blue-600">{{ stats.new_students_this_month }}명</p>
+                </div>
+                <div class="admin-card stat-card p-6">
+                    <h3 class="text-gray-500 text-sm font-medium">만료 예정 (7일 이내)</h3>
+                    <p class="text-3xl font-bold text-orange-500">{{ stats.expiring_soon_count }}명</p>
+                </div>
+                <div class="admin-card stat-card p-6">
+                    <h3 class="text-gray-500 text-sm font-medium">운행 차량 수</h3>
+                    <p class="text-3xl font-bold text-gray-800">{{ stats.total_vehicles }}대</p>
+                </div>
+            </div>
+
+            <!-- 차트 영역 -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <!-- 지점별 학생 분포 차트 -->
+                <div class="admin-card p-6">
+                    <h3 class="font-bold text-lg mb-4">지점별 학생 분포</h3>
+                    <div class="relative h-64">
+                        <canvas id="branchChart"></canvas>
+                    </div>
+                </div>
+                
+                <!-- 월별 신규 가입 추이 -->
+                <div class="admin-card p-6">
+                    <h3 class="font-bold text-lg mb-4">월별 신규 가입 추이</h3>
+                    <div class="relative h-64">
+                        <canvas id="monthlyChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 지점별 상세 정보 (마스터만) -->
+            {% if session.get('role') == 'master' %}
+            <div class="admin-card p-6">
+                <h3 class="font-bold text-lg mb-4">지점별 상세 현황</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left">
+                        <thead>
+                            <tr class="border-b bg-gray-50">
+                                <th class="py-3 px-4">지점명</th>
+                                <th class="py-3 px-4">총 학생</th>
+                                <th class="py-3 px-4">승인완료</th>
+                                <th class="py-3 px-4">승인대기</th>
+                                <th class="py-3 px-4">차량</th>
+                                <th class="py-3 px-4">클래스</th>
+                                <th class="py-3 px-4">이번 달 신규</th>
+                            </tr>
+                        </thead>
+                        <tbody id="branchStatsTable">
+                            <!-- JavaScript로 동적 생성 -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+        </main>
+    </div>
+
+    <script>
+        // 🔹 실제 데이터로 차트 생성
+        document.addEventListener('DOMContentLoaded', function() {
+            // 차트 색상 팔레트
+            const colors = [
+                '#3B82F6', '#EF4444', '#10B981', '#F59E0B', 
+                '#8B5CF6', '#EC4899', '#14B8A6', '#F97316'
+            ];
+
+            // 지점별 학생 분포 차트
+            const branchCtx = document.getElementById('branchChart').getContext('2d');
+            
+            // 🔹 서버에서 실제 데이터 가져오기
+            fetch('/api/branch-stats')
+                .then(response => response.json())
+                .then(data => {
+                    new Chart(branchCtx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: data.labels,
+                            datasets: [{
+                                data: data.values,
+                                backgroundColor: colors.slice(0, data.labels.length),
+                                borderWidth: 2,
+                                borderColor: '#fff'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    position: 'bottom'
+                                }
+                            }
+                        }
+                    });
+                })
+                .catch(error => {
+                    console.error('지점 통계 로딩 실패:', error);
+                    branchCtx.canvas.parentElement.innerHTML = '<p class="text-center text-gray-500 py-20">데이터를 불러올 수 없습니다.</p>';
+                });
+
+            // 월별 신규 가입 추이 차트
+            const monthlyCtx = document.getElementById('monthlyChart').getContext('2d');
+            
+            fetch('/api/monthly-stats')
+                .then(response => response.json())
+                .then(data => {
+                    new Chart(monthlyCtx, {
+                        type: 'line',
+                        data: {
+                            labels: data.months,
+                            datasets: [{
+                                label: '신규 가입',
+                                data: data.signups,
+                                borderColor: '#3B82F6',
+                                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                borderWidth: 3,
+                                fill: true,
+                                tension: 0.4
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    ticks: {
+                                        stepSize: 1
+                                    }
+                                }
+                            },
+                            plugins: {
+                                legend: {
+                                    display: false
+                                }
+                            }
+                        }
+                    });
+                })
+                .catch(error => {
+                    console.error('월별 통계 로딩 실패:', error);
+                    monthlyCtx.canvas.parentElement.innerHTML = '<p class="text-center text-gray-500 py-20">데이터를 불러올 수 없습니다.</p>';
+                });
+
+            // 🔹 마스터용 지점별 상세 테이블
+            {% if session.get('role') == 'master' %}
+            fetch('/api/detailed-branch-stats')
+                .then(response => response.json())
+                .then(data => {
+                    const tableBody = document.getElementById('branchStatsTable');
+                    tableBody.innerHTML = data.map(branch => `
+                        <tr class="border-b hover:bg-gray-50">
+                            <td class="py-3 px-4 font-medium">${branch.name}</td>
+                            <td class="py-3 px-4">${branch.total_students}명</td>
+                            <td class="py-3 px-4 text-green-600">${branch.approved}명</td>
+                            <td class="py-3 px-4 text-orange-600">${branch.pending}명</td>
+                            <td class="py-3 px-4">${branch.vehicles}대</td>
+                            <td class="py-3 px-4">${branch.classes}개</td>
+                            <td class="py-3 px-4 text-blue-600">+${branch.new_this_month}명</td>
+                        </tr>
+                    `).join('');
+                })
+                .catch(error => {
+                    console.error('상세 통계 로딩 실패:', error);
+                });
+            {% endif %}
+        });
+    </script>
+
+</body>
+</html>

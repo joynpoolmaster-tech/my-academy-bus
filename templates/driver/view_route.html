@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>기사님 운행 정보</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Sans KR', sans-serif; }
+        .navigation-btn {
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .navigation-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+        .student-card {
+            border-left: 4px solid #3B82F6;
+            transition: all 0.2s ease;
+        }
+        .student-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .completed {
+            border-left-color: #10B981;
+            background-color: #F0FDF4;
+        }
+        .in-progress {
+            border-left-color: #F59E0B;
+            background-color: #FFFBEB;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="max-w-lg mx-auto min-h-screen bg-white">
+        <!-- 헤더 -->
+        <header class="bg-blue-600 text-white p-4 sticky top-0 z-10 shadow-lg">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-xl font-bold">오늘의 운행 정보</h1>
+                    <p class="text-sm opacity-90" id="headerInfo">2025년 8월 7일 / 1호차 (김기사님)</p>
+                </div>
+                <div class="text-right">
+                    <div class="text-sm opacity-90">진행 상황</div>
+                    <div class="text-lg font-bold" id="progressInfo">0/5 완료</div>
+                </div>
+            </div>
+        </header>
+
+        <!-- 전체 경로 요약 -->
+        <div class="p-4 bg-blue-50 border-b">
+            <div class="flex items-center justify-between">
+                <div>
+                    <span class="text-sm text-gray-600">예상 총 소요시간</span>
+                    <div class="text-lg font-bold text-blue-600" id="totalTime">45분</div>
+                </div>
+                <button id="optimizeBtn" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition">
+                    📍 경로 최적화
+                </button>
+            </div>
+        </div>
+
+        <!-- 학생 목록 -->
+        <main class="p-4">
+            <div class="space-y-4" id="studentList">
+                <!-- 학생 카드들이 여기에 동적으로 생성됩니다 -->
+            </div>
+        </main>
+
+        <!-- 하단 고정 버튼 -->
+        <div class="fixed bottom-0 left-1/2 transform -translate-x-1/2 w-full max-w-lg bg-white border-t shadow-lg">
+            <div class="p-4 grid grid-cols-2 gap-3">
+                <button id="emergencyBtn" class="bg-red-500 text-white py-3 px-4 rounded-lg font-medium hover:bg-red-600 transition">
+                    🚨 긴급상황
+                </button>
+                <button id="completeBtn" class="bg-green-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-green-700 transition">
+                    ✅ 운행완료
+                </button>
+            </div>
+        </div>
+
+        <!-- 하단 여백 -->
+        <div class="h-20"></div>
+    </div>
+
+    <!-- 모달 - 네비게이션 선택 -->
+    <div id="navModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-lg max-w-sm w-full">
+                <div class="p-4 border-b">
+                    <h3 class="text-lg font-bold">네비게이션 앱 선택</h3>
+                    <p class="text-sm text-gray-600 mt-1" id="modalAddress"></p>
+                </div>
+                <div class="p-4 space-y-3">
+                    <button class="nav-option w-full flex items-center p-3 border rounded-lg hover:bg-gray-50 transition" data-type="kakao">
+                        <div class="w-10 h-10 bg-yellow-400 rounded-lg flex items-center justify-center mr-3">
+                            <span class="text-lg">🗺️</span>
+                        </div>
+                        <div class="text-left">
+                            <div class="font-medium">카카오내비</div>
+                            <div class="text-xs text-gray-500">실시간 교통정보 반영</div>
+                        </div>
+                    </button>
+                    
+                    <button class="nav-option w-full flex items-center p-3 border rounded-lg hover:bg-gray-50 transition" data-type="naver">
+                        <div class="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center mr-3">
+                            <span class="text-lg">🧭</span>
+                        </div>
+                        <div class="text-left">
+                            <div class="font-medium">네이버지도</div>
+                            <div class="text-xs text-gray-500">정확한 도로 정보</div>
+                        </div>
+                    </button>
+                    
+                    <button class="nav-option w-full flex items-center p-3 border rounded-lg hover:bg-gray-50 transition" data-type="google">
+                        <div class="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center mr-3">
+                            <span class="text-lg">🌐</span>
+                        </div>
+                        <div class="text-left">
+                            <div class="font-medium">구글맵</div>
+                            <div class="text-xs text-gray-500">글로벌 표준</div>
+                        </div>
+                    </button>
+                    
+                    <button class="nav-option w-full flex items-center p-3 border rounded-lg hover:bg-gray-50 transition" data-type="tmap">
+                        <div class="w-10 h-10 bg-red-500 rounded-lg flex items-center justify-center mr-3">
+                            <span class="text-lg">🚗</span>
+                        </div>
+                        <div class="text-left">
+                            <div class="font-medium">티맵</div>
+                            <div class="text-xs text-gray-500">정밀한 내비게이션</div>
+                        </div>
+                    </button>
+                </div>
+                <div class="p-4 border-t">
+                    <button id="closeModal" class="w-full py-2 text-gray-600 hover:text-gray-800 transition">
+                        취소
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 샘플 데이터
+        const routeData = {
+            driver: '김기사',
+            vehicle: '1호차',
+            date: '2025년 8월 7일',
+            timeSlot: '07:00',
+            students: [
+                {
+                    id: 1,
+                    name: '김민수',
+                    address: '경기도 용인시 기흥구 동천동 123-45',
+                    phone: '010-1234-5678',
+                    status: 'pending', // pending, in-progress, completed
+                    estimatedTime: 8,
+                    pickupOrder: 1
+                },
+                {
+                    id: 2,
+                    name: '이소영',
+                    address: '경기도 용인시 기흥구 영덕동 67-89',
+                    phone: '010-2345-6789',
+                    status: 'pending',
+                    estimatedTime: 5,
+                    pickupOrder: 2
+                },
+                {
+                    id: 3,
+                    name: '박정호',
+                    address: '경기도 용인시 기흥구 보정동 111-22',
+                    phone: '010-3456-7890',
+                    status: 'pending',
+                    estimatedTime: 7,
+                    pickupOrder: 3
+                },
+                {
+                    id: 4,
+                    name: '강지우',
+                    address: '경기도 용인시 기흥구 동천동 222-33',
+                    phone: '010-4567-8901',
+                    status: 'pending',
+                    estimatedTime: 6,
+                    pickupOrder: 4
+                },
+                {
+                    id: 5,
+                    name: '윤서연',
+                    address: '경기도 용인시 기흥구 죽전동 333-44',
+                    phone: '010-5678-9012',
+                    status: 'pending',
+                    estimatedTime: 9,
+                    pickupOrder: 5
+                }
+            ]
+        };
+
+        let currentAddress = '';
+
+        // 초기화
+        function initialize() {
+            updateHeader();
+            renderStudentList();
+            updateProgress();
+        }
+
+        // 헤더 정보 업데이트
+        function updateHeader() {
+            document.getElementById('headerInfo').textContent = 
+                `${routeData.date} / ${routeData.vehicle} (${routeData.driver}님)`;
+        }
+
+        // 학생 목록 렌더링
+        function renderStudentList() {
+            const container = document.getElementById('studentList');
+            container.innerHTML = '';
+
+            routeData.students
+                .sort((a, b) => a.pickupOrder - b.pickupOrder)
+                .forEach((student, index) => {
+                    const card = createStudentCard(student, index);
+                    container.appendChild(card);
+                });
+        }
+
+        // 학생 카드 생성
+        function createStudentCard(student, index) {
+            const card = document.createElement('div');
+            card.className = `student-card bg-white p-4 rounded-lg shadow-md ${getStatusClass(student.status)}`;
+            
+            card.innerHTML = `
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center">
+                        <div class="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold mr-3">
+                            ${student.pickupOrder}
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-lg">${student.name}</h3>
+                            <p class="text-sm text-gray-600">${student.phone}</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-xs text-gray-500">예상시간</div>
+                        <div class="font-bold text-blue-600">${student.estimatedTime}분</div>
+                    </div>
+                </div>
+                
+                <p class="text-sm text-gray-700 mb-4 leading-relaxed">${student.address}</p>
+                
+                <div class="flex gap-2">
+                    <button onclick="openNavigation('${student.address}')" 
+                            class="navigation-btn flex-1 bg-blue-600 text-white py-2 px-3 rounded-lg font-medium hover:bg-blue-700 transition flex items-center justify-center">
+                        🧭 네비게이션
+                    </button>
+                    <button onclick="callStudent('${student.phone}')" 
+                            class="navigation-btn bg-green-600 text-white py-2 px-3 rounded-lg font-medium hover:bg-green-700 transition">
+                        📞
+                    </button>
+                    <button onclick="toggleStatus(${student.id})" 
+                            class="navigation-btn ${getActionButtonClass(student.status)} py-2 px-3 rounded-lg font-medium transition">
+                        ${getActionButtonText(student.status)}
+                    </button>
+                </div>
+            `;
+
+            return card;
+        }
+
+        // 상태별 클래스
+        function getStatusClass(status) {
+            switch(status) {
+                case 'completed': return 'completed';
+                case 'in-progress': return 'in-progress';
+                default: return '';
+            }
+        }
+
+        function getActionButtonClass(status) {
+            switch(status) {
+                case 'completed': return 'bg-gray-400 text-white cursor-not-allowed';
+                case 'in-progress': return 'bg-green-600 text-white hover:bg-green-700';
+                default: return 'bg-orange-500 text-white hover:bg-orange-600';
+            }
+        }
+
+        function getActionButtonText(status) {
+            switch(status) {
+                case 'completed': return '✅';
+                case 'in-progress': return '완료';
+                default: return '출발';
+            }
+        }
+
+        // 네비게이션 모달 열기
+        function openNavigation(address) {
+            currentAddress = address;
+            document.getElementById('modalAddress').textContent = address;
+            document.getElementById('navModal').classList.remove('hidden');
+        }
+
+        // 네비게이션 앱 실행
+        function launchNavigation(type, address) {
+            const encodedAddress = encodeURIComponent(address);
+            let url = '';
+
+            switch(type) {
+                case 'kakao':
+                    // 카카오내비 앱 스킴
+                    url = `kakaomap://route?ep=${encodedAddress}&by=CAR`;
+                    break;
+                case 'naver':
+                    // 네이버지도 앱 스킴
+                    url = `nmap://route/public?dlat=&dlng=&dname=${encodedAddress}&appname=joypool`;
+                    break;
+                case 'google':
+                    // 구글맵
+                    url = `https://maps.google.com/maps?daddr=${encodedAddress}`;
+                    break;
+                case 'tmap':
+                    // 티맵
+                    url = `tmap://route?goalname=${encodedAddress}`;
+                    break;
+            }
+
+            // 앱 실행 시도
+            const link = document.createElement('a');
+            link.href = url;
+            link.target = '_blank';
+            
+            // 모바일에서 앱 스킴 실행
+            if (type === 'kakao' || type === 'naver' || type === 'tmap') {
+                try {
+                    link.click();
+                } catch (e) {
+                    // 앱이 설치되지 않은 경우 웹 버전으로 폴백
+                    if (type === 'kakao') {
+                        window.open(`https://map.kakao.com/link/to/${encodedAddress}`, '_blank');
+                    } else if (type === 'naver') {
+                        window.open(`https://map.naver.com/v5/directions/-/-/-/car?c=14.00,0,0,0,dh`, '_blank');
+                    }
+                }
+            } else {
+                link.click();
+            }
+
+            closeModal();
+        }
+
+        // 전화 걸기
+        function callStudent(phone) {
+            window.location.href = `tel:${phone}`;
+        }
+
+        // 학생 상태 변경
+        function toggleStatus(studentId) {
+            const student = routeData.students.find(s => s.id === studentId);
+            if (!student || student.status === 'completed') return;
+
+            if (student.status === 'pending') {
+                student.status = 'in-progress';
+            } else if (student.status === 'in-progress') {
+                student.status = 'completed';
+            }
+
+            renderStudentList();
+            updateProgress();
+        }
+
+        // 진행 상황 업데이트
+        function updateProgress() {
+            const completed = routeData.students.filter(s => s.status === 'completed').length;
+            const total = routeData.students.length;
+            
+            document.getElementById('progressInfo').textContent = `${completed}/${total} 완료`;
+            
+            // 총 소요시간 업데이트
+            const remainingTime = routeData.students
+                .filter(s => s.status !== 'completed')
+                .reduce((sum, s) => sum + s.estimatedTime, 0);
+            
+            document.getElementById('totalTime').textContent = `${remainingTime}분`;
+        }
+
+        // 경로 최적화
+        function optimizeRoute() {
+            // 미완료 학생들을 거리순으로 재정렬 (시뮬레이션)
+            const pendingStudents = routeData.students.filter(s => s.status === 'pending');
+            
+            if (pendingStudents.length <= 1) {
+                alert('최적화할 경로가 없습니다.');
+                return;
+            }
+
+            // 간단한 최적화 시뮬레이션 (실제로는 지도 API 사용)
+            pendingStudents.sort(() => Math.random() - 0.5);
+            
+            let order = 1;
+            routeData.students.forEach(student => {
+                if (student.status !== 'pending') return;
+                student.pickupOrder = order++;
+            });
+
+            renderStudentList();
+            
+            alert('경로가 최적화되었습니다!\n예상 소요시간이 단축될 수 있습니다.');
+        }
+
+        // 긴급상황 신고
+        function reportEmergency() {
+            const confirmed = confirm('긴급상황을 신고하시겠습니까?\n관리자에게 즉시 알림이 전송됩니다.');
+            
+            if (confirmed) {
+                alert('긴급상황이 신고되었습니다.\n관리자가 곧 연락드릴 예정입니다.');
+                
+                // 실제 구현시에는 서버로 긴급상황 전송
+                console.log('Emergency reported:', {
+                    driver: routeData.driver,
+                    vehicle: routeData.vehicle,
+                    timestamp: new Date().toISOString(),
+                    location: 'Current GPS location'
+                });
+            }
+        }
+
+        // 운행 완료
+        function completeRoute() {
+            const completed = routeData.students.filter(s => s.status === 'completed').length;
+            const total = routeData.students.length;
+            
+            if (completed < total) {
+                alert(`아직 ${total - completed}명의 학생이 남아있습니다.\n모든 학생을 태운 후 완료해주세요.`);
+                return;
+            }
+            
+            const confirmed = confirm('모든 학생 픽업을 완료하셨습니까?\n운행을 종료하시겠습니까?');
+            
+            if (confirmed) {
+                alert('운행이 완료되었습니다.\n수고하셨습니다!');
+                
+                // 실제 구현시에는 서버에 완료 상태 전송
+                console.log('Route completed:', {
+                    driver: routeData.driver,
+                    vehicle: routeData.vehicle,
+                    completedAt: new Date().toISOString(),
+                    studentsPickedUp: total
+                });
+            }
+        }
+
+        // 모달 닫기
+        function closeModal() {
+            document.getElementById('navModal').classList.add('hidden');
+        }
+
+        // 이벤트 리스너
+        document.addEventListener('DOMContentLoaded', function() {
+            initialize();
+            
+            // 네비게이션 옵션 클릭
+            document.querySelectorAll('.nav-option').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const type = btn.dataset.type;
+                    launchNavigation(type, currentAddress);
+                });
+            });
+            
+            // 버튼 이벤트
+            document.getElementById('optimizeBtn').addEventListener('click', optimizeRoute);
+            document.getElementById('emergencyBtn').addEventListener('click', reportEmergency);
+            document.getElementById('completeBtn').addEventListener('click', completeRoute);
+            document.getElementById('closeModal').addEventListener('click', closeModal);
+            
+            // 모달 배경 클릭 시 닫기
+            document.getElementById('navModal').addEventListener('click', (e) => {
+                if (e.target === e.currentTarget) {
+                    closeModal();
+                }
+            });
+        });
+
+        // 전역 함수로 노출 (인라인 이벤트 핸들러용)
+        window.openNavigation = openNavigation;
+        window.callStudent = callStudent;
+        window.toggleStatus = toggleStatus;
+    </script>
+</body>
+</html>

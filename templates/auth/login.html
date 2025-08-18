@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JOY & POOL - 로그인</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Sans KR', sans-serif; }
+        .gradient-bg {
+            background: linear-gradient(160deg, #a8d5e5 0%, #3b82f6 50%, #1e3a8a 100%);
+        }
+        .form-card {
+            background-color: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+        }
+    </style>
+</head>
+<body class="gradient-bg">
+
+    <div class="flex flex-col items-center justify-center min-h-screen">
+        <div class="w-full max-w-md p-8 space-y-6 form-card rounded-xl shadow-2xl">
+            <div class="text-center">
+                <img src="https://i.imgur.com/gO0208A.png" alt="JOY & POOL 로고" class="w-32 h-auto mx-auto mb-4">
+                <h2 class="text-3xl font-bold text-gray-800">JOY & POOL</h2>
+                <p class="text-gray-600">프리미엄 스위밍 클럽</p>
+            </div>
+
+            <!-- Flash 메시지를 표시하는 부분 -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+              {% if messages %}
+                {% for category, message in messages %}
+                  <div class="p-4 my-4 rounded-md 
+                    {% if category == 'success' %} bg-green-100 text-green-700 
+                    {% elif category == 'danger' %} bg-red-100 text-red-700 
+                    {% elif category == 'warning' %} bg-yellow-100 text-yellow-700
+                    {% else %} bg-blue-100 text-blue-700 {% endif %}"
+                    role="alert">
+                    {{ message }}
+                  </div>
+                {% endfor %}
+              {% endif %}
+            {% endwith %}
+            
+            <form class="space-y-6" method="POST" action="{{ url_for('login') }}">
+                <div>
+                    <label for="email" class="text-sm font-medium text-gray-700">이메일 (아이디)</label>
+                    <input type="email" id="email" name="email" class="mt-1 block w-full px-4 py-3 bg-white border border-gray-300 rounded-lg placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500" placeholder="email@example.com" required>
+                </div>
+                <div>
+                    <label for="password" class="text-sm font-medium text-gray-700">비밀번호</label>
+                    <input type="password" id="password" name="password" class="mt-1 block w-full px-4 py-3 bg-white border border-gray-300 rounded-lg placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500" placeholder="••••••••" required>
+                </div>
+                <div>
+                    <button type="submit" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition duration-300">
+                        로그인
+                    </button>
+                </div>
+            </form>
+
+            <div class="text-center text-sm text-gray-500">
+                <a href="{{ url_for('signup_member') }}" class="hover:underline text-blue-600">회원가입</a>
+                <span class="mx-2">|</span>
+                <a href="#" class="hover:underline text-blue-600">계정찾기</a>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>

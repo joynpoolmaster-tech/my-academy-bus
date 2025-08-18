@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>마스터 - 지점 관리</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Sans KR', sans-serif; }
+        .admin-sidebar-bg { background-color: #F0F9FF; }
+        .admin-header-bg { background-color: #E0F2FE; }
+    </style>
+</head>
+<body class="bg-gray-100 flex">
+
+    <div class="admin-sidebar-bg w-64 min-h-screen p-4 hidden md:block">
+        <div class="text-2xl font-bold text-blue-800 mb-8">마스터 시스템</div>
+        <nav class="space-y-2">
+            <a href="{{ url_for('manage_branches') }}" 
+               class="flex items-center p-3 rounded-lg text-blue-900 bg-blue-200 font-bold">
+                지점/관리자 관리
+            </a>
+            <a href="{{ url_for('master_advanced_dashboard') }}" 
+               class="flex items-center p-3 rounded-lg text-gray-700 hover:bg-blue-100">
+               📊 고급 대시보드
+            </a>
+            <a href="{{ url_for('manage_students') }}" 
+               class="flex items-center p-3 rounded-lg text-gray-700 hover:bg-blue-100">
+               대시보드
+            </a>
+            <a href="{{ url_for('manage_students') }}" 
+               class="flex items-center p-3 rounded-lg text-gray-700 hover:bg-blue-100">
+                회원 관리
+            </a>
+            <a href="{{ url_for('manage_classes') }}" 
+               class="flex items-center p-3 rounded-lg text-gray-700 hover:bg-blue-100">
+                클래스 관리
+            </a>
+            <a href="{{ url_for('manage_vehicles') }}" 
+               class="flex items-center p-3 rounded-lg text-gray-700 hover:bg-blue-100">
+                기사/차량 관리
+            </a>
+            <a href="{{ url_for('manage_dispatch') }}" 
+               class="flex items-center p-3 rounded-lg text-gray-700 hover:bg-blue-100">
+                배차 관리
+            </a>
+        </nav>
+    </div>
+
+    <div class="flex-1 flex flex-col">
+        <header class="admin-header-bg p-4 flex justify-between items-center shadow-md">
+            <h2 class="text-xl font-bold text-blue-800">지점 및 관리자 관리</h2>
+            <div>
+                <span class="mr-4">{{ session.get('user_name') }}님 (마스터)</span>
+                <a href="{{ url_for('logout') }}" class="bg-white text-blue-600 px-4 py-2 rounded-lg shadow hover:bg-gray-100">로그아웃</a>
+            </div>
+        </header>
+        
+        <main class="flex-1 p-6">
+            <!-- Flash 메시지 표시 -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+              {% if messages %}
+                {% for category, message in messages %}
+                  <div class="mb-4 p-4 rounded-md 
+                    {% if category == 'success' %} bg-green-100 text-green-700 
+                    {% elif category == 'danger' %} bg-red-100 text-red-700 
+                    {% elif category == 'warning' %} bg-yellow-100 text-yellow-700
+                    {% else %} bg-blue-100 text-blue-700 {% endif %}"
+                    role="alert">
+                    {{ message }}
+                  </div>
+                {% endfor %}
+              {% endif %}
+            {% endwith %}
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- 지점 생성 -->
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <h3 class="font-bold text-lg mb-4">새 지점 생성</h3>
+                    <form method="POST" action="{{ url_for('add_branch') }}" class="space-y-4">
+                        <div>
+                            <label for="name" class="block text-sm font-medium text-gray-700">지점명</label>
+                            <input type="text" name="name" id="name" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" required>
+                        </div>
+                        <div>
+                            <label for="password" class="block text-sm font-medium text-gray-700">마스터 비밀번호 확인</label>
+                            <input type="password" name="password" id="password" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" required>
+                        </div>
+                        <button type="submit" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition duration-300">지점 생성</button>
+                    </form>
+                </div>
+
+                <!-- 관리자 생성 -->
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <h3 class="font-bold text-lg mb-4">새 관리자 생성</h3>
+                    <form method="POST" action="{{ url_for('add_admin') }}" class="space-y-4">
+                        <div>
+                            <label for="branch_id" class="block text-sm font-medium text-gray-700">담당 지점</label>
+                            <select name="branch_id" id="branch_id" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" required>
+                                <option value="">지점 선택</option>
+                                {% for branch in branches %}
+                                <option value="{{ branch.id }}">{{ branch.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label for="admin_email" class="block text-sm font-medium text-gray-700">이메일</label>
+                            <input type="email" name="email" id="admin_email" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" required>
+                        </div>
+                        <div>
+                            <label for="admin_name" class="block text-sm font-medium text-gray-700">이름</label>
+                            <input type="text" name="name" id="admin_name" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" required>
+                        </div>
+                        <div>
+                            <label for="admin_password" class="block text-sm font-medium text-gray-700">초기 비밀번호</label>
+                            <input type="password" name="password" id="admin_password" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" required>
+                        </div>
+                        <button type="submit" class="w-full bg-green-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-700 transition duration-300">관리자 생성</button>
+                    </form>
+                </div>
+                
+                <!-- 지점 목록 -->
+                <div class="lg:col-span-1 bg-white p-6 rounded-lg shadow-md">
+                    <h3 class="font-bold text-lg mb-4">지점 목록</h3>
+                    <div class="space-y-3">
+                        {% for branch in branches %}
+                        <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition duration-150">
+                            <div class="flex justify-between items-start">
+                                <div class="flex-1">
+                                    <h4 class="font-bold text-lg text-blue-800">{{ branch.name }}</h4>
+                                    <div class="mt-2">
+                                        <p class="text-sm text-gray-600 font-medium">담당 관리자:</p>
+                                        {% if branch.admins %}
+                                            {% for admin in branch.admins %}
+                                            <div class="flex justify-between items-center mt-1 p-2 bg-gray-50 rounded">
+                                                <span class="text-sm">{{ admin.name }} ({{ admin.email }})</span>
+                                                <button onclick="confirmDeleteAdmin({{ admin.id }}, '{{ admin.name }}', '{{ branch.name }}')" 
+                                                        class="text-red-500 hover:text-red-700 text-xs font-bold px-2 py-1 rounded transition duration-150">
+                                                    삭제
+                                                </button>
+                                            </div>
+                                            {% endfor %}
+                                        {% else %}
+                                            <span class="text-sm text-gray-400">관리자 없음</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="ml-4 flex flex-col space-y-2">
+                                    <button onclick="showBranchInfo({{ branch.id }})" 
+                                            class="text-blue-600 hover:text-blue-800 text-xs font-bold px-2 py-1 border border-blue-600 rounded transition duration-150">
+                                        상세정보
+                                    </button>
+                                    <button onclick="confirmDeleteBranch({{ branch.id }}, '{{ branch.name }}')" 
+                                            class="text-red-600 hover:text-red-800 text-xs font-bold px-2 py-1 border border-red-600 rounded transition duration-150">
+                                        지점삭제
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        {% else %}
+                        <div class="text-center py-10 text-gray-500">
+                            <svg class="mx-auto h-12 w-12 text-gray-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                            </svg>
+                            <p class="text-lg font-medium">생성된 지점이 없습니다.</p>
+                            <p class="text-sm text-gray-400 mt-1">새 지점을 생성해보세요.</p>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 🔹 지점 삭제 확인 모달 -->
+    <div id="deleteBranchModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-lg shadow-xl max-w-md w-full">
+                <div class="p-6">
+                    <div class="flex items-center mb-4">
+                        <svg class="w-6 h-6 text-red-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                        </svg>
+                        <h3 class="text-lg font-bold text-gray-900">지점 삭제 확인</h3>
+                    </div>
+                    <div id="branchDeleteContent" class="mb-4">
+                        <!-- 동적 내용이 여기에 삽입됩니다 -->
+                    </div>
+                    <form id="deleteBranchForm" method="POST" action="">
+                        <div class="mb-4">
+                            <label for="branchDeletePassword" class="block text-sm font-medium text-gray-700 mb-2">마스터 비밀번호 확인</label>
+                            <input type="password" name="password" id="branchDeletePassword" 
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-red-500 focus:border-red-500" 
+                                   placeholder="비밀번호를 입력하세요" required>
+                        </div>
+                        <div class="flex space-x-3">
+                            <button type="button" onclick="closeBranchDeleteModal()" 
+                                    class="flex-1 bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg hover:bg-gray-400 transition duration-300">
+                                취소
+                            </button>
+                            <button type="submit" 
+                                    class="flex-1 bg-red-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-700 transition duration-300">
+                                삭제
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 🔹 관리자 삭제 확인 모달 -->
+    <div id="deleteAdminModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-lg shadow-xl max-w-md w-full">
+                <div class="p-6">
+                    <div class="flex items-center mb-4">
+                        <svg class="w-6 h-6 text-red-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                        </svg>
+                        <h3 class="text-lg font-bold text-gray-900">관리자 삭제 확인</h3>
+                    </div>
+                    <div id="adminDeleteContent" class="mb-4">
+                        <!-- 동적 내용이 여기에 삽입됩니다 -->
+                    </div>
+                    <form id="deleteAdminForm" method="POST" action="">
+                        <div class="mb-4">
+                            <label for="adminDeletePassword" class="block text-sm font-medium text-gray-700 mb-2">마스터 비밀번호 확인</label>
+                            <input type="password" name="password" id="adminDeletePassword" 
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-red-500 focus:border-red-500" 
+                                   placeholder="비밀번호를 입력하세요" required>
+                        </div>
+                        <div class="flex space-x-3">
+                            <button type="button" onclick="closeAdminDeleteModal()" 
+                                    class="flex-1 bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg hover:bg-gray-400 transition duration-300">
+                                취소
+                            </button>
+                            <button type="submit" 
+                                    class="flex-1 bg-red-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-700 transition duration-300">
+                                삭제
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 🔹 지점 상세 정보 모달 -->
+    <div id="branchInfoModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-lg shadow-xl max-w-lg w-full">
+                <div class="p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-bold text-gray-900">지점 상세 정보</h3>
+                        <button onclick="closeBranchInfoModal()" class="text-gray-400 hover:text-gray-600">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
+                    <div id="branchInfoContent" class="space-y-3">
+                        <!-- 동적 내용이 여기에 삽입됩니다 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 🔹 지점 삭제 관련 함수들
+        async function confirmDeleteBranch(branchId, branchName) {
+            try {
+                const response = await fetch(`/api/branch_info/${branchId}`);
+                const data = await response.json();
+                
+                if (data.error) {
+                    alert('지점 정보를 가져오는 중 오류가 발생했습니다.');
+                    return;
+                }
+                
+                let content = `<p class="text-gray-700 mb-3"><strong>${data.branch_name}</strong> 지점을 삭제하시겠습니까?</p>`;
+                
+                if (!data.can_delete) {
+                    content += `<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-3">
+                        <p class="font-bold">⚠️ 삭제할 수 없습니다!</p>
+                        <p class="text-sm">다음 항목들이 있어 삭제할 수 없습니다:</p>
+                        <ul class="text-sm mt-1 list-disc list-inside">`;
+                    
+                    data.warnings.forEach(warning => {
+                        content += `<li>${warning}</li>`;
+                    });
+                    
+                    content += `</ul></div>`;
+                    
+                    document.getElementById('branchDeleteContent').innerHTML = content;
+                    document.getElementById('deleteBranchForm').style.display = 'none';
+                    document.getElementById('deleteBranchModal').classList.remove('hidden');
+                    return;
+                }
+                
+                content += `<div class="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-3">
+                    <p class="font-bold">🗑️ 다음 데이터가 함께 삭제됩니다:</p>
+                    <ul class="text-sm mt-1 list-disc list-inside">
+                        <li>클래스 ${data.classes_count}개</li>
+                        <li>관리자 계정 ${data.admins_count}개</li>
+                        <li>기사 계정 ${data.drivers_count}개 (지점 연결 해제)</li>
+                    </ul>
+                </div>
+                <p class="text-red-600 font-bold text-sm">⚠️ 이 작업은 복구할 수 없습니다!</p>`;
+                
+                document.getElementById('branchDeleteContent').innerHTML = content;
+                document.getElementById('deleteBranchForm').action = `/master/delete_branch/${branchId}`;
+                document.getElementById('deleteBranchForm').style.display = 'block';
+                document.getElementById('deleteBranchModal').classList.remove('hidden');
+                
+            } catch (error) {
+                console.error('Error:', error);
+                alert('지점 정보를 가져오는 중 오류가 발생했습니다.');
+            }
+        }
+
+        function closeBranchDeleteModal() {
+            document.getElementById('deleteBranchModal').classList.add('hidden');
+            document.getElementById('branchDeletePassword').value = '';
+        }
+
+        // 🔹 관리자 삭제 관련 함수들
+        function confirmDeleteAdmin(adminId, adminName, branchName) {
+            const content = `
+                <p class="text-gray-700 mb-3">
+                    <strong>${branchName}</strong> 지점의 관리자 <strong>${adminName}</strong>을 삭제하시겠습니까?
+                </p>
+                <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-3">
+                    <p class="font-bold">⚠️ 주의사항</p>
+                    <ul class="text-sm mt-1 list-disc list-inside">
+                        <li>관리자 계정이 완전히 삭제됩니다</li>
+                        <li>해당 관리자는 더 이상 로그인할 수 없습니다</li>
+                        <li>이 작업은 복구할 수 없습니다</li>
+                    </ul>
+                </div>
+            `;
+            
+            document.getElementById('adminDeleteContent').innerHTML = content;
+            document.getElementById('deleteAdminForm').action = `/master/delete_admin/${adminId}`;
+            document.getElementById('deleteAdminModal').classList.remove('hidden');
+        }
+
+        function closeAdminDeleteModal() {
+            document.getElementById('deleteAdminModal').classList.add('hidden');
+            document.getElementById('adminDeletePassword').value = '';
+        }
+
+        // 🔹 지점 상세 정보 관련 함수들
+        async function showBranchInfo(branchId) {
+            try {
+                const response = await fetch(`/api/branch_info/${branchId}`);
+                const data = await response.json();
+                
+                if (data.error) {
+                    alert('지점 정보를 가져오는 중 오류가 발생했습니다.');
+                    return;
+                }
+                
+                const content = `
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                        <h4 class="font-bold text-blue-800 text-xl mb-2">${data.branch_name} 지점</h4>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-gray-50 p-3 rounded">
+                            <p class="text-sm text-gray-600">등록된 학생</p>
+                            <p class="text-2xl font-bold text-blue-600">${data.students_count}명</p>
+                        </div>
+                        <div class="bg-gray-50 p-3 rounded">
+                            <p class="text-sm text-gray-600">등록된 차량</p>
+                            <p class="text-2xl font-bold text-green-600">${data.vehicles_count}대</p>
+                        </div>
+                        <div class="bg-gray-50 p-3 rounded">
+                            <p class="text-sm text-gray-600">클래스</p>
+                            <p class="text-2xl font-bold text-purple-600">${data.classes_count}개</p>
+                        </div>
+                        <div class="bg-gray-50 p-3 rounded">
+                            <p class="text-sm text-gray-600">관리자</p>
+                            <p class="text-2xl font-bold text-orange-600">${data.admins_count}명</p>
+                        </div>
+                        <div class="bg-gray-50 p-3 rounded">
+                            <p class="text-sm text-gray-600">기사</p>
+                            <p class="text-2xl font-bold text-indigo-600">${data.drivers_count}명</p>
+                        </div>
+                        <div class="bg-gray-50 p-3 rounded">
+                            <p class="text-sm text-gray-600">배차 기록</p>
+                            <p class="text-2xl font-bold text-gray-600">${data.dispatch_count}건</p>
+                        </div>
+                    </div>
+                    
+                    ${data.can_delete ? 
+                        '<div class="mt-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded"><p class="text-sm font-bold">✅ 이 지점은 삭제할 수 있습니다.</p></div>' : 
+                        '<div class="mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded"><p class="text-sm font-bold">❌ 관련 데이터가 있어 삭제할 수 없습니다.</p></div>'
+                    }
+                `;
+                
+                document.getElementById('branchInfoContent').innerHTML = content;
+                document.getElementById('branchInfoModal').classList.remove('hidden');
+                
+            } catch (error) {
+                console.error('Error:', error);
+                alert('지점 정보를 가져오는 중 오류가 발생했습니다.');
+            }
+        }
+
+        function closeBranchInfoModal() {
+            document.getElementById('branchInfoModal').classList.add('hidden');
+        }
+
+        // 🔹 모달 외부 클릭 시 닫기
+        document.addEventListener('click', function(event) {
+            if (event.target.id === 'deleteBranchModal') {
+                closeBranchDeleteModal();
+            }
+            if (event.target.id === 'deleteAdminModal') {
+                closeAdminDeleteModal();
+            }
+            if (event.target.id === 'branchInfoModal') {
+                closeBranchInfoModal();
+            }
+        });
+
+        // 🔹 ESC 키로 모달 닫기
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                closeBranchDeleteModal();
+                closeAdminDeleteModal();
+                closeBranchInfoModal();
+            }
+        });
+    </script>
+
+</body>
+</html>

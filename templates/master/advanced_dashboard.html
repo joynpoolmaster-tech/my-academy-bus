@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>마스터 고급 대시보드 - JOY & POOL</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.3/index.min.js"></script>
+    <style>
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin-bottom: 2rem;
+        }
+        .metric-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .growth-positive { color: #10b981; }
+        .growth-negative { color: #ef4444; }
+        .growth-neutral { color: #6b7280; }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- 헤더 -->
+    <header class="bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg">
+        <div class="container mx-auto px-6 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <h1 class="text-2xl font-bold">🏊‍♀️ JOY & POOL 마스터 대시보드</h1>
+                    <span class="bg-white/20 px-3 py-1 rounded-full text-sm">고급 분석</span>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span class="text-sm opacity-90">{{ today.strftime('%Y년 %m월 %d일') }}</span>
+                    <a href="{{ url_for('manage_branches') }}" class="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition">
+                        지점 관리
+                    </a>
+                    <a href="{{ url_for('logout') }}" class="bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg transition">
+                        로그아웃
+                    </a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="container mx-auto px-6 py-8">
+        <!-- 전체 요약 메트릭 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div class="metric-card">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-white/80 text-sm">총 학생 수</p>
+                        <p class="text-3xl font-bold">{{ stats.total_students }}</p>
+                        <p class="text-white/80 text-xs mt-1">전체 등록자</p>
+                    </div>
+                    <div class="text-4xl opacity-80">👥</div>
+                </div>
+            </div>
+            
+            <div class="metric-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-white/80 text-sm">이번 달 신규</p>
+                        <p class="text-3xl font-bold">{{ stats.new_students_this_month }}</p>
+                        <p class="text-white/80 text-xs mt-1">신규 가입자</p>
+                    </div>
+                    <div class="text-4xl opacity-80">📈</div>
+                </div>
+            </div>
+            
+            <div class="metric-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-white/80 text-sm">승인 대기</p>
+                        <p class="text-3xl font-bold">{{ stats.pending_approvals }}</p>
+                        <p class="text-white/80 text-xs mt-1">검토 필요</p>
+                    </div>
+                    <div class="text-4xl opacity-80">⏳</div>
+                </div>
+            </div>
+            
+            <div class="metric-card" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-white/80 text-sm">활성 지점</p>
+                        <p class="text-3xl font-bold">{{ stats.total_branches }}</p>
+                        <p class="text-white/80 text-xs mt-1">{{ stats.total_vehicles }}대 차량</p>
+                    </div>
+                    <div class="text-4xl opacity-80">🏢</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 주요 분석 차트 -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+            <!-- 연도별 성장 비교 -->
+            <div class="bg-white rounded-xl shadow-lg p-6">
+                <h3 class="text-xl font-bold text-gray-800 mb-4">📊 연도별 성장 비교</h3>
+                <div class="chart-container">
+                    <canvas id="yearlyGrowthChart"></canvas>
+                </div>
+            </div>
+
+            <!-- 지점별 성과 랭킹 -->
+            <div class="bg-white rounded-xl shadow-lg p-6">
+                <h3 class="text-xl font-bold text-gray-800 mb-4">🏆 지점 성과 랭킹</h3>
+                <div id="performanceRanking" class="space-y-3">
+                    <!-- 동적으로 로드됨 -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 지점-클래스 매트릭스 & 시간대 분석 -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+            <!-- 지점별-클래스별 매트릭스 -->
+            <div class="bg-white rounded-xl shadow-lg p-6">
+                <h3 class="text-xl font-bold text-gray-800 mb-4">🎯 지점별 클래스 분포</h3>
+                <div id="branchClassMatrix" class="overflow-x-auto">
+                    <!-- 동적으로 로드됨 -->
+                </div>
+            </div>
+
+            <!-- 시간대별 수요 분석 -->
+            <div class="bg-white rounded-xl shadow-lg p-6">
+                <h3 class="text-xl font-bold text-gray-800 mb-4">⏰ 시간대별 수요 분석</h3>
+                <div class="chart-container">
+                    <canvas id="timeSlotChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- 클래스 인기도 트렌드 & 월별 상세 비교 -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+            <!-- 클래스 인기도 트렌드 -->
+            <div class="bg-white rounded-xl shadow-lg p-6">
+                <h3 class="text-xl font-bold text-gray-800 mb-4">🔥 클래스 인기도 트렌드</h3>
+                <div class="chart-container">
+                    <canvas id="classPopularityChart"></canvas>
+                </div>
+            </div>
+
+            <!-- 월별 상세 비교 -->
+            <div class="bg-white rounded-xl shadow-lg p-6">
+                <h3 class="text-xl font-bold text-gray-800 mb-4">📅 월별 상세 비교</h3>
+                <div id="monthlyComparison" class="space-y-4">
+                    <!-- 동적으로 로드됨 -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 지점별 상세 현황 테이블 -->
+        <div class="bg-white rounded-xl shadow-lg p-6">
+            <h3 class="text-xl font-bold text-gray-800 mb-4">📋 지점별 종합 현황</h3>
+            <div class="overflow-x-auto">
+                <table class="min-w-full table-auto">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">지점</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">총 학생</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">승인/대기</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">이번달</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">성장률</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">차량</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">클래스</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200" id="branchDetailsTable">
+                        {% for branch in stats.branch_details %}
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-4 py-4 whitespace-nowrap">
+                                <div class="font-medium text-gray-900">{{ branch.name }}</div>
+                            </td>
+                            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {{ branch.total_students }}명
+                            </td>
+                            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <span class="text-green-600">{{ branch.approved }}</span> / 
+                                <span class="text-orange-600">{{ branch.pending }}</span>
+                            </td>
+                            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {{ branch.new_this_month }}명
+                            </td>
+                            <td class="px-4 py-4 whitespace-nowrap text-sm">
+                                {% if branch.growth_rate > 0 %}
+                                    <span class="growth-positive">+{{ "%.1f"|format(branch.growth_rate) }}%</span>
+                                {% elif branch.growth_rate < 0 %}
+                                    <span class="growth-negative">{{ "%.1f"|format(branch.growth_rate) }}%</span>
+                                {% else %}
+                                    <span class="growth-neutral">0%</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {{ branch.vehicles }}대
+                            </td>
+                            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {{ branch.classes }}개
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 전역 변수
+        let charts = {};
+
+        // 차트 색상 팔레트
+        const colors = {
+            primary: '#3b82f6',
+            secondary: '#8b5cf6',
+            success: '#10b981',
+            warning: '#f59e0b',
+            danger: '#ef4444',
+            info: '#06b6d4'
+        };
+
+        // 페이지 로드 시 모든 차트 초기화
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeAllCharts();
+            loadPerformanceRanking();
+            loadBranchClassMatrix();
+            loadMonthlyComparison();
+        });
+
+        async function initializeAllCharts() {
+            try {
+                await Promise.all([
+                    loadYearlyGrowthChart(),
+                    loadTimeSlotChart(),
+                    loadClassPopularityChart()
+                ]);
+            } catch (error) {
+                console.error('차트 로딩 중 오류:', error);
+            }
+        }
+
+        // 연도별 성장 비교 차트
+        async function loadYearlyGrowthChart() {
+            try {
+                const response = await fetch('/api/master/yearly-growth-comparison');
+                const data = await response.json();
+                
+                const ctx = document.getElementById('yearlyGrowthChart').getContext('2d');
+                
+                charts.yearlyGrowth = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.data.map(item => item.month),
+                        datasets: [{
+                            label: `${data.current_year}년`,
+                            data: data.data.map(item => item.current_year),
+                            borderColor: colors.primary,
+                            backgroundColor: colors.primary + '20',
+                            tension: 0.4,
+                            fill: true
+                        }, {
+                            label: `${data.last_year}년`,
+                            data: data.data.map(item => item.last_year),
+                            borderColor: colors.secondary,
+                            backgroundColor: colors.secondary + '20',
+                            tension: 0.4,
+                            fill: true
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                            },
+                            title: {
+                                display: true,
+                                text: '월별 신규 가입자 추이'
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: '신규 가입자 수'
+                                }
+                            }
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error('연도별 성장 차트 로딩 오류:', error);
+            }
+        }
+
+        // 시간대별 수요 분석 차트
+        async function loadTimeSlotChart() {
+            try {
+                const response = await fetch('/api/master/time-slot-analysis');
+                const data = await response.json();
+                
+                const ctx = document.getElementById('timeSlotChart').getContext('2d');
+                
+                charts.timeSlot = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: data.map(item => item.time_slot),
+                        datasets: [{
+                            label: '학생 수',
+                            data: data.map(item => item.total_students),
+                            backgroundColor: colors.info + '80',
+                            borderColor: colors.info,
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            title: {
+                                display: true,
+                                text: '시간대별 학생 분포'
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: '학생 수'
+                                }
+                            },
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: '수업 시간'
+                                }
+                            }
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error('시간대 차트 로딩 오류:', error);
+            }
+        }
+
+        // 클래스 인기도 트렌드 차트
+        async function loadClassPopularityChart() {
+            try {
+                const response = await fetch('/api/master/class-popularity-trends');
+                const data = await response.json();
+                
+                const ctx = document.getElementById('classPopularityChart').getContext('2d');
+                
+                // 모든 클래스명 수집
+                const allClasses = new Set();
+                data.forEach(month => {
+                    Object.keys(month.classes).forEach(className => {
+                        allClasses.add(className);
+                    });
+                });
+                
+                const classColors = [
+                    '#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', 
+                    '#ef4444', '#06b6d4', '#84cc16', '#f97316'
+                ];
+                
+                const datasets = Array.from(allClasses).map((className, index) => ({
+                    label: className,
+                    data: data.map(month => month.classes[className] || 0),
+                    borderColor: classColors[index % classColors.length],
+                    backgroundColor: classColors[index % classColors.length] + '20',
+                    tension: 0.4,
+                    fill: false
+                }));
+                
+                charts.classPopularity = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.map(item => item.month_name),
+                        datasets: datasets
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                                labels: {
+                                    boxWidth: 12,
+                                    usePointStyle: true
+                                }
+                            },
+                            title: {
+                                display: true,
+                                text: '최근 6개월 클래스별 신규 가입 추이'
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: '신규 가입자 수'
+                                }
+                            }
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error('클래스 인기도 차트 로딩 오류:', error);
+            }
+        }
+
+        // 성과 랭킹 로드
+        async function loadPerformanceRanking() {
+            try {
+                const response = await fetch('/api/master/performance-ranking');
+                const data = await response.json();
+                
+                const container = document.getElementById('performanceRanking');
+                container.innerHTML = '';
+                
+                data.slice(0, 5).forEach((branch, index) => {
+                    const rankClass = index === 0 ? 'border-l-4 border-yellow-400' : 
+                                     index === 1 ? 'border-l-4 border-gray-400' :
+                                     index === 2 ? 'border-l-4 border-orange-400' : 'border-l-4 border-blue-200';
+                    
+                    const growthClass = branch.growth_rate > 0 ? 'growth-positive' : 
+                                      branch.growth_rate < 0 ? 'growth-negative' : 'growth-neutral';
+                    
+                    const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}위`;
+                    
+                    container.innerHTML += `
+                        <div class="bg-gray-50 rounded-lg p-4 ${rankClass}">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center space-x-3">
+                                    <span class="text-lg font-bold">${medal}</span>
+                                    <div>
+                                        <h4 class="font-semibold text-gray-800">${branch.branch_name}</h4>
+                                        <p class="text-sm text-gray-600">총 ${branch.total_students}명 (승인율 ${branch.approval_rate}%)</p>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-sm text-gray-600">이번달 성장률</p>
+                                    <p class="font-bold ${growthClass}">${branch.growth_rate > 0 ? '+' : ''}${branch.growth_rate}%</p>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+            } catch (error) {
+                console.error('성과 랭킹 로딩 오류:', error);
+            }
+        }
+
+        // 지점-클래스 매트릭스 로드
+        async function loadBranchClassMatrix() {
+            try {
+                const response = await fetch('/api/master/branch-class-matrix');
+                const data = await response.json();
+                
+                const container = document.getElementById('branchClassMatrix');
+                
+                if (data.matrix.length === 0) {
+                    container.innerHTML = '<p class="text-gray-500 text-center">데이터가 없습니다.</p>';
+                    return;
+                }
+                
+                let tableHTML = `
+                    <table class="min-w-full text-sm">
+                        <thead class="bg-gray-100">
+                            <tr>
+                                <th class="px-3 py-2 text-left font-medium text-gray-700">지점</th>
+                `;
+                
+                data.class_names.forEach(className => {
+                    tableHTML += `<th class="px-3 py-2 text-center font-medium text-gray-700">${className}</th>`;
+                });
+                
+                tableHTML += `<th class="px-3 py-2 text-center font-medium text-gray-700 bg-blue-50">총계</th></tr></thead><tbody>`;
+                
+                data.matrix.forEach((branch, index) => {
+                    const rowClass = index % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+                    tableHTML += `<tr class="${rowClass}">`;
+                    tableHTML += `<td class="px-3 py-2 font-medium text-gray-800">${branch.branch}</td>`;
+                    
+                    data.class_names.forEach(className => {
+                        const count = branch[className] || 0;
+                        const cellClass = count > 0 ? 'text-blue-600 font-medium' : 'text-gray-400';
+                        tableHTML += `<td class="px-3 py-2 text-center ${cellClass}">${count}</td>`;
+                    });
+                    
+                    tableHTML += `<td class="px-3 py-2 text-center font-bold text-blue-800 bg-blue-50">${branch.total}</td>`;
+                    tableHTML += `</tr>`;
+                });
+                
+                tableHTML += '</tbody></table>';
+                container.innerHTML = tableHTML;
+            } catch (error) {
+                console.error('지점-클래스 매트릭스 로딩 오류:', error);
+            }
+        }
+
+        // 월별 상세 비교 로드
+        async function loadMonthlyComparison() {
+            try {
+                const response = await fetch('/api/master/monthly-comparison-detailed');
+                const data = await response.json();
+                
+                const container = document.getElementById('monthlyComparison');
+                container.innerHTML = `
+                    <div class="mb-4 p-3 bg-blue-50 rounded-lg">
+                        <h4 class="font-semibold text-blue-800">${data.period.current} vs ${data.period.previous}</h4>
+                    </div>
+                `;
+                
+                data.comparison.forEach(branch => {
+                    const newGrowthClass = branch.growth.new > 0 ? 'growth-positive' : 
+                                         branch.growth.new < 0 ? 'growth-negative' : 'growth-neutral';
+                    
+                    container.innerHTML += `
+                        <div class="bg-gray-50 rounded-lg p-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <h5 class="font-semibold text-gray-800">${branch.branch_name}</h5>
+                                <span class="text-sm ${newGrowthClass} font-medium">
+                                    ${branch.growth.new > 0 ? '+' : ''}${branch.growth.new}%
+                                </span>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4 text-sm">
+                                <div>
+                                    <p class="text-gray-600">신규 가입</p>
+                                    <p class="font-medium">
+                                        ${branch.this_month.new}명 
+                                        <span class="text-gray-500">(전월: ${branch.last_month.new}명)</span>
+                                    </p>
+                                </div>
+                                <div>
+                                    <p class="text-gray-600">승인 완료</p>
+                                    <p class="font-medium">
+                                        ${branch.this_month.approved}명 
+                                        <span class="text-gray-500">(전월: ${branch.last_month.approved}명)</span>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+            } catch (error) {
+                console.error('월별 비교 로딩 오류:', error);
+            }
+        }
+
+        // 차트 새로고침 함수
+        function refreshAllCharts() {
+            Object.values(charts).forEach(chart => {
+                if (chart) chart.destroy();
+            });
+            charts = {};
+            
+            initializeAllCharts();
+            loadPerformanceRanking();
+            loadBranchClassMatrix();
+            loadMonthlyComparison();
+        }
+
+        // 5분마다 자동 새로고침 (선택사항)
+        // setInterval(refreshAllCharts, 300000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,1016 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>배차 관리 시스템</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+        }
+
+        .tab-active {
+            background-color: #3B82F6;
+            color: white;
+        }
+
+        .tab-inactive {
+            background-color: #F3F4F6;
+            color: #6B7280;
+        }
+
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        .success-flash {
+            background-color: #D1FAE5;
+            color: #065F46;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin: 1rem 0;
+        }
+
+        .error-flash {
+            background-color: #FEE2E2;
+            color: #B91C1C;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin: 1rem 0;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8">
+        <div class="max-w-7xl mx-auto">
+            <!-- 알림 메시지 영역 -->
+            <div id="flashMessages"></div>
+
+            <!-- 헤더 -->
+            <div class="bg-white rounded-lg shadow-lg mb-6">
+                <div class="bg-blue-600 text-white p-6 rounded-t-lg">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h1 class="text-2xl font-bold">🚐 배차 관리 시스템</h1>
+                            <p class="mt-1 opacity-90">
+                                {{ current_user.managed_branch.name if current_user.managed_branch else '미설정' }} 관리자 ({{
+                                current_user.name }}님)
+                            </p>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-sm opacity-90">오늘 배차 현황</div>
+                            <div class="text-xl font-bold" id="todayStatus">
+                                운행중 <span id="operatingCount">0</span>대 /
+                                대기 <span id="waitingCount">0</span>대
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 탭 메뉴 -->
+                <div class="flex border-b">
+                    <button class="tab-btn tab-active px-6 py-3 font-medium transition" data-tab="regular">
+                        📋 정규 배차
+                    </button>
+                    <button class="tab-btn tab-inactive px-6 py-3 font-medium transition" data-tab="special">
+                        🚨 특별 배차
+                    </button>
+                    <button class="tab-btn tab-inactive px-6 py-3 font-medium transition" data-tab="history">
+                        📊 배차 이력
+                    </button>
+                </div>
+            </div>
+
+            <!-- 정규 배차 탭 -->
+            <div id="regularTab" class="tab-content">
+                <div class="grid lg:grid-cols-3 gap-6">
+                    <!-- 배차 설정 -->
+                    <div class="lg:col-span-1">
+                        <div class="bg-white rounded-lg shadow-md p-6">
+                            <h3 class="text-lg font-semibold mb-4">📅 정규 배차 생성</h3>
+
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">배차 날짜</label>
+                                    <input type="date" id="dispatchDate" value="{{ today_str }}"
+                                        class="w-full border rounded-md px-3 py-2">
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">클래스 선택</label>
+                                    <select id="classSelect" class="w-full border rounded-md px-3 py-2">
+                                        <option value="">전체 클래스</option>
+                                        {% for class_item in available_classes %}
+                                        <option value="{{ class_item.name }}">
+                                            {{ class_item.name }}
+                                            {% if class_item.time_slots %}
+                                            ({{ class_item.time_slots[0].time }})
+                                            {% endif %}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">배차 옵션</label>
+                                    <div class="space-y-2">
+                                        <label class="flex items-center">
+                                            <input type="checkbox" id="autoOptimize" checked class="mr-2">
+                                            <span class="text-sm">경로 자동 최적화</span>
+                                        </label>
+                                        <label class="flex items-center">
+                                            <input type="checkbox" id="autoAssign" checked class="mr-2">
+                                            <span class="text-sm">기사 자동 배정</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="bg-blue-50 p-3 rounded-lg">
+                                    <div class="text-sm text-blue-800 font-medium">배차 예상 정보</div>
+                                    <div class="text-xs text-blue-600 mt-1" id="dispatchPreview">
+                                        클래스를 선택하면 예상 정보가 표시됩니다
+                                    </div>
+                                </div>
+
+                                <button id="generateRegular"
+                                    class="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition font-medium">
+                                    📋 정규 배차 생성
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 리소스 현황 -->
+                        <div class="bg-white rounded-lg shadow-md p-6 mt-6">
+                            <h3 class="text-lg font-semibold mb-4">🚗 리소스 현황</h3>
+                            <div class="space-y-3">
+                                <div class="flex justify-between items-center">
+                                    <span class="text-sm text-gray-600">가용 기사</span>
+                                    <span class="font-bold text-green-600" id="availableDrivers">{{
+                                        available_drivers|length }}명</span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-sm text-gray-600">가용 차량</span>
+                                    <span class="font-bold text-green-600" id="availableVehicles">{{
+                                        available_vehicles|length }}대</span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-sm text-gray-600">대기 학생</span>
+                                    <span class="font-bold text-blue-600" id="waitingStudents">조회중...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 배차 현황 -->
+                    <div class="lg:col-span-2">
+                        <div class="bg-white rounded-lg shadow-md">
+                            <div class="p-4 border-b flex justify-between items-center">
+                                <h3 class="text-lg font-semibold">📊 오늘 배차 현황</h3>
+                                <div class="flex gap-2">
+                                    <button id="refreshDispatch"
+                                        class="bg-gray-500 text-white px-3 py-1 rounded text-sm hover:bg-gray-600">
+                                        🔄 새로고침
+                                    </button>
+                                    <button id="exportDispatch"
+                                        class="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700">
+                                        📄 내보내기
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="overflow-x-auto">
+                                <table class="w-full">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th class="px-4 py-3 text-left text-sm font-medium text-gray-700">배차번호</th>
+                                            <th class="px-4 py-3 text-left text-sm font-medium text-gray-700">클래스</th>
+                                            <th class="px-4 py-3 text-left text-sm font-medium text-gray-700">기사/차량</th>
+                                            <th class="px-4 py-3 text-left text-sm font-medium text-gray-700">학생수</th>
+                                            <th class="px-4 py-3 text-left text-sm font-medium text-gray-700">상태</th>
+                                            <th class="px-4 py-3 text-left text-sm font-medium text-gray-700">액션</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="regularDispatchTable">
+                                        <tr>
+                                            <td colspan="6" class="px-4 py-8 text-center text-gray-500">
+                                                배차 정보를 생성해주세요
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 특별 배차 탭 -->
+            <div id="specialTab" class="tab-content hidden">
+                <div class="grid lg:grid-cols-3 gap-6">
+                    <!-- 특별 배차 생성 -->
+                    <div class="lg:col-span-1">
+                        <div class="bg-white rounded-lg shadow-md p-6">
+                            <h3 class="text-lg font-semibold mb-4">🚨 특별 배차 신청</h3>
+
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">배차 유형</label>
+                                    <select id="specialType" class="w-full border rounded-md px-3 py-2">
+                                        <option value="emergency">긴급 배차</option>
+                                        <option value="individual">개별 요청</option>
+                                        <option value="makeup">보강 수업</option>
+                                        <option value="event">특별 행사</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">신청 날짜/시간</label>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <input type="date" id="specialDate" value="{{ today_str }}"
+                                            class="border rounded-md px-3 py-2">
+                                        <input type="time" id="specialTime" class="border rounded-md px-3 py-2">
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">대상 학생</label>
+                                    <div class="space-y-2" id="studentSelector">
+                                        <button type="button" id="addStudent"
+                                            class="w-full border-2 border-dashed border-gray-300 rounded-lg p-3 text-gray-500 hover:border-blue-300 hover:text-blue-500 transition">
+                                            + 학생 추가
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">사유</label>
+                                    <textarea id="specialReason" rows="3" class="w-full border rounded-md px-3 py-2"
+                                        placeholder="특별 배차 사유를 입력해주세요"></textarea>
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">우선순위</label>
+                                    <select id="priority" class="w-full border rounded-md px-3 py-2">
+                                        <option value="normal">일반</option>
+                                        <option value="urgent">긴급</option>
+                                        <option value="critical">매우 긴급</option>
+                                    </select>
+                                </div>
+
+                                <button id="submitSpecial"
+                                    class="w-full bg-red-600 text-white py-3 rounded-lg hover:bg-red-700 transition font-medium">
+                                    🚨 특별 배차 신청
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 특별 배차 현황 -->
+                    <div class="lg:col-span-2">
+                        <div class="bg-white rounded-lg shadow-md">
+                            <div class="p-4 border-b">
+                                <h3 class="text-lg font-semibold">🚨 특별 배차 현황</h3>
+                            </div>
+
+                            <div class="overflow-x-auto">
+                                <table class="w-full">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th class="px-4 py-3 text-left text-sm font-medium text-gray-700">신청시간</th>
+                                            <th class="px-4 py-3 text-left text-sm font-medium text-gray-700">유형</th>
+                                            <th class="px-4 py-3 text-left text-sm font-medium text-gray-700">학생/사유</th>
+                                            <th class="px-4 py-3 text-left text-sm font-medium text-gray-700">우선순위</th>
+                                            <th class="px-4 py-3 text-left text-sm font-medium text-gray-700">상태</th>
+                                            <th class="px-4 py-3 text-left text-sm font-medium text-gray-700">액션</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="specialDispatchTable">
+                                        <tr>
+                                            <td colspan="6" class="px-4 py-8 text-center text-gray-500">
+                                                특별 배차 신청 내역이 없습니다
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 배차 이력 탭 -->
+            <div id="historyTab" class="tab-content hidden">
+                <div class="bg-white rounded-lg shadow-md">
+                    <div class="p-4 border-b flex justify-between items-center">
+                        <h3 class="text-lg font-semibold">📊 배차 이력</h3>
+                        <div class="flex gap-2">
+                            <input type="date" id="historyFrom" class="border rounded-md px-3 py-2 text-sm">
+                            <input type="date" id="historyTo" value="{{ today_str }}"
+                                class="border rounded-md px-3 py-2 text-sm">
+                            <button id="searchHistory"
+                                class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">
+                                🔍 조회
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-700">날짜</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-700">클래스</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-700">기사</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-700">학생수</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-700">완료시간</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-700">평가</th>
+                                </tr>
+                            </thead>
+                            <tbody id="historyTable">
+                                <tr>
+                                    <td colspan="6" class="px-4 py-8 text-center text-gray-500">
+                                        조회 기간을 선택하고 검색 버튼을 클릭해주세요
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 학생 선택 모달 -->
+    <div id="studentModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-lg max-w-md w-full max-h-96">
+                <div class="p-4 border-b">
+                    <h3 class="text-lg font-bold">학생 선택</h3>
+                </div>
+                <div class="p-4 max-h-64 overflow-y-auto">
+                    <div class="space-y-2" id="studentList">
+                        <!-- 학생 목록이 여기에 동적으로 생성됩니다 -->
+                    </div>
+                </div>
+                <div class="p-4 border-t flex gap-2">
+                    <button id="confirmStudent" class="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700">
+                        확인
+                    </button>
+                    <button id="cancelStudent" class="flex-1 bg-gray-500 text-white py-2 rounded hover:bg-gray-600">
+                        취소
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Flask에서 전달받은 사용자 정보
+        const currentUser = {
+            role: '{{ current_user.role }}',
+            branchId: {{ current_user.branch_id if current_user.branch_id else 'null' }},
+        branchName: '{{ current_user.managed_branch.name if current_user.managed_branch else "미설정" }}',
+            name: '{{ current_user.name }}',
+                permissions: ['view_dispatch', 'create_dispatch', 'manage_special_dispatch']
+        };
+
+        // 서버에서 전달받은 클래스 데이터
+        const availableClasses = [
+            {% for class_item in available_classes %}
+        {
+            id: { { class_item.id } },
+            name: '{{ class_item.name }}',
+                timeSlots: [
+                    {% for time_slot in class_item.time_slots %}
+        '{{ time_slot.time }}'{% if not loop.last %}, {% endif %}
+        {% endfor %}
+                ]
+            }{% if not loop.last %}, {% endif %}
+        {% endfor %}
+        ];
+
+        // 글로벌 변수
+        let currentDispatches = [];
+        let selectedStudents = [];
+        let isLoading = false;
+
+        // ✅ 1. 초기화 함수 개선
+        function initialize() {
+            const today = new Date();
+            document.getElementById('dispatchDate').value = today.toISOString().split('T')[0];
+
+            // 이력 조회 시작 날짜 (7일 전)
+            const weekAgo = new Date(today);
+            weekAgo.setDate(weekAgo.getDate() - 7);
+            document.getElementById('historyFrom').value = weekAgo.toISOString().split('T')[0];
+
+            setupEventListeners();
+            updateResourceStatus();
+
+            // ✅ 페이지 로드 시 기존 배차 목록 조회
+            loadDispatchList();
+        }
+
+        // ✅ 2. 플래시 메시지 표시 함수
+        function showFlashMessage(message, type = 'success') {
+            const container = document.getElementById('flashMessages');
+            const alertDiv = document.createElement('div');
+            alertDiv.className = type === 'success' ? 'success-flash' : 'error-flash';
+            alertDiv.innerHTML = `
+                <div class="flex justify-between items-center">
+                    <span>${message}</span>
+                    <button onclick="this.parentElement.parentElement.remove()" class="text-lg font-bold ml-4">&times;</button>
+                </div>
+            `;
+            container.appendChild(alertDiv);
+
+            // 5초 후 자동 제거
+            setTimeout(() => {
+                if (alertDiv.parentNode) {
+                    alertDiv.remove();
+                }
+            }, 5000);
+        }
+
+        // ✅ 3. 로딩 상태 관리
+        function setLoading(loading) {
+            isLoading = loading;
+            const button = document.getElementById('generateRegular');
+            if (loading) {
+                button.disabled = true;
+                button.innerHTML = '⏳ 생성 중...';
+                button.classList.add('loading');
+            } else {
+                button.disabled = false;
+                button.innerHTML = '📋 정규 배차 생성';
+                button.classList.remove('loading');
+            }
+        }
+
+        // ✅ 4. 개선된 정규 배차 생성 함수
+        function generateRegularDispatch() {
+            if (isLoading) return;
+
+            const selectedClass = document.getElementById('classSelect').value;
+            const dispatchDate = document.getElementById('dispatchDate').value;
+            const autoOptimize = document.getElementById('autoOptimize').checked;
+            const autoAssign = document.getElementById('autoAssign').checked;
+
+            if (!selectedClass) {
+                showFlashMessage('클래스를 선택해주세요.', 'error');
+                return;
+            }
+
+            setLoading(true);
+
+            // API 호출
+            fetch('/api/dispatch/regular', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    class_name: selectedClass,
+                    dispatch_date: dispatchDate,
+                    auto_optimize: autoOptimize,
+                    auto_assign: autoAssign
+                })
+            })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    setLoading(false);
+                    if (data.success) {
+                        showFlashMessage(`배차가 성공적으로 생성되었습니다! (${data.created_count || 1}개 배차)`, 'success');
+
+                        // ✅ 중요: 배차 생성 후 즉시 목록 새로고침
+                        setTimeout(() => {
+                            loadDispatchList();
+                            updateResourceStatus();
+                        }, 500);
+
+                    } else {
+                        showFlashMessage('배차 생성 실패: ' + (data.error || '알 수 없는 오류'), 'error');
+                    }
+                })
+                .catch(error => {
+                    setLoading(false);
+                    console.error('Error:', error);
+                    showFlashMessage('배차 생성 중 오류가 발생했습니다: ' + error.message, 'error');
+                });
+        }
+
+        // ✅ 5. 개선된 배차 목록 로드 함수
+        function loadDispatchList() {
+            const today = document.getElementById('dispatchDate').value || new Date().toISOString().split('T')[0];
+
+            fetch(`/api/dispatch/list?date=${today}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        currentDispatches = data.dispatches || [];
+                        updateRegularDispatchTable(currentDispatches);
+                        updateTodayStatus(currentDispatches);
+                    } else {
+                        console.error('배차 목록 로드 실패:', data.error);
+                        updateRegularDispatchTable([]);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading dispatch list:', error);
+                    updateRegularDispatchTable([]);
+                });
+        }
+
+        // ✅ 6. 개선된 배차 테이블 업데이트
+        function updateRegularDispatchTable(dispatches = []) {
+            const tbody = document.getElementById('regularDispatchTable');
+            tbody.innerHTML = '';
+
+            if (dispatches.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="px-4 py-8 text-center text-gray-500">
+                            오늘 배차된 정보가 없습니다
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            dispatches.forEach((dispatch, index) => {
+                const row = document.createElement('tr');
+                row.className = 'border-b hover:bg-gray-50';
+
+                // 상태에 따른 색상 결정
+                let statusClass = 'bg-gray-100 text-gray-800';
+                let statusText = '대기';
+
+                if (dispatch.status === 'assigned') {
+                    statusClass = 'bg-blue-100 text-blue-800';
+                    statusText = '배정됨';
+                } else if (dispatch.status === 'in_progress') {
+                    statusClass = 'bg-yellow-100 text-yellow-800';
+                    statusText = '운행중';
+                } else if (dispatch.status === 'completed') {
+                    statusClass = 'bg-green-100 text-green-800';
+                    statusText = '완료';
+                }
+
+                row.innerHTML = `
+                    <td class="px-4 py-3 font-medium">#${dispatch.id || (index + 1)}</td>
+                    <td class="px-4 py-3">${dispatch.class_name || '-'}</td>
+                    <td class="px-4 py-3">
+                        <div class="text-sm">
+                            <div class="font-medium">${dispatch.driver_name || '미배정'}</div>
+                            <div class="text-gray-500">${dispatch.vehicle_name || '차량 미배정'}</div>
+                        </div>
+                    </td>
+                    <td class="px-4 py-3 font-bold text-blue-600">${dispatch.student_count || 0}명</td>
+                    <td class="px-4 py-3">
+                        <span class="px-2 py-1 rounded-full text-xs ${statusClass}">
+                            ${statusText}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3">
+                        <button onclick="viewDispatchDetail('${dispatch.id}')" class="bg-blue-500 text-white px-2 py-1 rounded text-xs hover:bg-blue-600 mr-1">
+                            상세
+                        </button>
+                        ${dispatch.status === 'assigned' ?
+                        `<button onclick="startDispatch('${dispatch.id}')" class="bg-green-500 text-white px-2 py-1 rounded text-xs hover:bg-green-600">시작</button>` :
+                        ''
+                    }
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // ✅ 7. 오늘 배차 현황 업데이트
+        function updateTodayStatus(dispatches = []) {
+            const operating = dispatches.filter(d => d.status === 'in_progress').length;
+            const waiting = dispatches.filter(d => d.status === 'assigned').length;
+
+            document.getElementById('operatingCount').textContent = operating;
+            document.getElementById('waitingCount').textContent = waiting;
+        }
+
+        // ✅ 8. 리소스 현황 업데이트
+        function updateResourceStatus() {
+            fetch('/api/students/by-class?class_name=')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        document.getElementById('waitingStudents').textContent = `${data.students.length}명`;
+                    }
+                })
+                .catch(() => {
+                    document.getElementById('waitingStudents').textContent = '조회 실패';
+                });
+        }
+
+        // ✅ 9. 개선된 배차 이력 조회
+        function searchDispatchHistory() {
+            const fromDate = document.getElementById('historyFrom').value;
+            const toDate = document.getElementById('historyTo').value;
+
+            if (!fromDate || !toDate) {
+                showFlashMessage('조회 기간을 선택해주세요.', 'error');
+                return;
+            }
+
+            fetch(`/api/dispatch/history?from_date=${fromDate}&to_date=${toDate}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        updateHistoryTable(data.history || []);
+                    } else {
+                        showFlashMessage('배차 이력 조회 실패: ' + data.error, 'error');
+                        updateHistoryTable([]);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showFlashMessage('배차 이력 조회 중 오류가 발생했습니다.', 'error');
+                    updateHistoryTable([]);
+                });
+        }
+
+        // ✅ 10. 배차 이력 테이블 업데이트
+        function updateHistoryTable(historyData) {
+            const tbody = document.getElementById('historyTable');
+            tbody.innerHTML = '';
+
+            if (historyData.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="px-4 py-8 text-center text-gray-500">
+                            선택한 기간에 배차 이력이 없습니다
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            historyData.forEach(dayData => {
+                const row = document.createElement('tr');
+                row.className = 'border-b hover:bg-gray-50';
+                row.innerHTML = `
+                    <td class="px-4 py-3 font-medium">${dayData.date_formatted}</td>
+                    <td class="px-4 py-3">
+                        <div class="text-sm">${dayData.class_summary}</div>
+                    </td>
+                    <td class="px-4 py-3">${dayData.vehicles_used}대 운행</td>
+                    <td class="px-4 py-3 font-bold text-blue-600">${dayData.total_students}명</td>
+                    <td class="px-4 py-3">
+                        <button onclick="viewDayDispatchDetail('${dayData.date}')" 
+                                class="bg-blue-500 text-white px-3 py-1 rounded text-xs hover:bg-blue-600">
+                            상세보기
+                        </button>
+                    </td>
+                    <td class="px-4 py-3">
+                        <span class="px-2 py-1 rounded-full text-xs bg-green-100 text-green-800">완료</span>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // 탭 전환 함수
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('tab-active');
+                btn.classList.add('tab-inactive');
+            });
+            document.querySelector(`[data-tab="${tabName}"]`).classList.add('tab-active');
+            document.querySelector(`[data-tab="${tabName}"]`).classList.remove('tab-inactive');
+
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.add('hidden');
+            });
+            document.getElementById(`${tabName}Tab`).classList.remove('hidden');
+
+            // ✅ 탭 전환 시 데이터 새로고침
+            if (tabName === 'regular') {
+                loadDispatchList();
+            } else if (tabName === 'history') {
+                // 배차 이력 탭 진입 시 자동으로 최근 7일 조회
+                setTimeout(searchDispatchHistory, 300);
+            }
+        }
+
+        // 기타 함수들
+        function viewDispatchDetail(dispatchId) {
+            // 배차 상세 정보 모달 표시 로직
+            showFlashMessage(`배차 #${dispatchId} 상세 정보 (개발 중)`, 'success');
+        }
+
+        function startDispatch(dispatchId) {
+            // 배차 시작 로직
+            if (confirm('이 배차를 시작하시겠습니까?')) {
+                fetch(`/api/dispatch/${dispatchId}/start`, {
+                    method: 'POST'
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            showFlashMessage('배차가 시작되었습니다.', 'success');
+                            loadDispatchList();
+                        } else {
+                            showFlashMessage('배차 시작 실패: ' + data.error, 'error');
+                        }
+                    });
+            }
+        }
+
+        function viewDayDispatchDetail(date) {
+            window.open(`/admin/dispatch/${date}`, '_blank');
+        }
+
+        // ✅ 이벤트 리스너 설정
+        function setupEventListeners() {
+            // 탭 버튼
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+            });
+
+            // 클래스 선택 변경
+            document.getElementById('classSelect').addEventListener('change', updateDispatchPreview);
+
+            // 배차 날짜 변경
+            document.getElementById('dispatchDate').addEventListener('change', () => {
+                loadDispatchList(); // 날짜 변경 시 해당 날짜 배차 목록 로드
+            });
+
+            // 정규 배차 생성
+            document.getElementById('generateRegular').addEventListener('click', generateRegularDispatch);
+
+            // 이력 조회
+            document.getElementById('searchHistory').addEventListener('click', searchDispatchHistory);
+
+            // 새로고침
+            document.getElementById('refreshDispatch').addEventListener('click', refreshDispatchData);
+
+
+            loadDispatchList();
+            updateResourceStatus();
+            showFlashMessage('배차 현황이 새로고침되었습니다.', 'success');
+        });
+
+        // 내보내기
+        document.getElementById('exportDispatch').addEventListener('click', exportDispatchData);
+        }
+
+        // ✅ 배차 미리보기 업데이트
+        function updateDispatchPreview() {
+            const selectedClass = document.getElementById('classSelect').value;
+            const previewElement = document.getElementById('dispatchPreview');
+
+            if (!selectedClass) {
+                previewElement.textContent = '클래스를 선택하면 예상 정보가 표시됩니다';
+                return;
+            }
+
+            previewElement.innerHTML = '<div class="text-gray-500">⏳ 정보 조회 중...</div>';
+
+            fetch('/api/dispatch/preview', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    class_name: selectedClass,
+                    dispatch_date: document.getElementById('dispatchDate').value
+                })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const studentsPerVehicle = Math.ceil(data.student_count / data.estimated_vehicles);
+                        previewElement.innerHTML = `
+                        <div>📚 대상 학생: <strong>${data.student_count}명</strong></div>
+                        <div>🚐 필요 차량: <strong>${data.estimated_vehicles}대</strong></div>
+                        <div>👥 차량당 평균: <strong>${studentsPerVehicle}명</strong></div>
+                        <div class="text-gray-600 mt-1">⏱️ 예상 소요: ${data.estimated_time || '15-25'}분</div>
+                    `;
+                    } else {
+                        previewElement.innerHTML = '<div class="text-red-600">❌ ' + (data.error || '조회 실패') + '</div>';
+                    }
+                })
+                .catch(() => {
+                    previewElement.innerHTML = '<div class="text-red-600">❌ 네트워크 오류</div>';
+                });
+        }
+
+        // ✅ 개선된 배차 데이터 내보내기
+        function exportDispatchData() {
+            console.log('📥 CSV 내보내기 시작...');
+
+            const today = document.getElementById('dispatchDate').value || new Date().toISOString().split('T')[0];
+
+            // 현재 표시된 배차 데이터 확인
+            if (!currentDispatches || currentDispatches.length === 0) {
+                showFlashMessage('❌ 내보낼 배차 데이터가 없습니다. 먼저 배차를 생성해주세요.', 'error');
+                return;
+            }
+
+            try {
+                // CSV 헤더와 데이터 생성
+                const headers = ['배차번호', '클래스', '기사명', '차량번호', '학생수', '상태', '생성시간'];
+                const csvData = [headers];
+
+                currentDispatches.forEach(dispatch => {
+                    csvData.push([
+                        dispatch.id || '',
+                        dispatch.class_name || '미지정',
+                        dispatch.driver_name || '미배정',
+                        dispatch.vehicle_name || '미배정',
+                        dispatch.student_count || 0,
+                        getStatusKorean(dispatch.status),
+                        formatDateTime(dispatch.created_at) || ''
+                    ]);
+                });
+
+                // CSV 파일 생성 및 다운로드
+                const csvContent = csvData.map(row =>
+                    row.map(cell => `"${cell}"`).join(',')
+                ).join('\n');
+
+                const blob = new Blob(['\ufeff' + csvContent], {
+                    type: 'text/csv;charset=utf-8;'
+                });
+
+                const link = document.createElement('a');
+                const url = URL.createObjectURL(blob);
+                link.setAttribute('href', url);
+                link.setAttribute('download', `배차현황_${today}.csv`);
+                link.style.visibility = 'hidden';
+
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+
+                // 메모리 정리
+                URL.revokeObjectURL(url);
+
+                showFlashMessage(`✅ 배차 현황이 CSV 파일로 다운로드되었습니다. (${currentDispatches.length}건)`, 'success');
+                console.log('📥 CSV 내보내기 완료!');
+
+            } catch (error) {
+                console.error('CSV 내보내기 오류:', error);
+                showFlashMessage('❌ CSV 내보내기 중 오류가 발생했습니다.', 'error');
+            }
+        }
+
+        // ✅ 상태 텍스트 한글 변환 함수 (개선된 버전)
+        function getStatusKorean(status) {
+            const statusMap = {
+                'pending': '대기중',
+                'assigned': '배정완료',
+                'in_progress': '운행중',
+                'completed': '완료',
+                'cancelled': '취소됨'
+            };
+            return statusMap[status] || '알 수 없음';
+        }
+
+        // ✅ 날짜시간 포맷 함수
+        function formatDateTime(dateTimeStr) {
+            if (!dateTimeStr) return '';
+
+            try {
+                const date = new Date(dateTimeStr);
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                const hours = String(date.getHours()).padStart(2, '0');
+                const minutes = String(date.getMinutes()).padStart(2, '0');
+
+                return `${year}-${month}-${day} ${hours}:${minutes}`;
+            } catch (error) {
+                console.error('날짜 포맷 오류:', error);
+                return dateTimeStr;
+            }
+        }
+
+        // ✅ 개선된 새로고침 함수
+        function refreshDispatchData() {
+            console.log('🔄 배차 데이터 새로고침 시작...');
+
+            // 로딩 상태 표시
+            const refreshBtn = document.getElementById('refreshDispatch');
+            if (refreshBtn) {
+                refreshBtn.disabled = true;
+                refreshBtn.innerHTML = '🔄 새로고침 중...';
+            }
+
+            // 배차 목록과 리소스 상태 동시 업데이트
+            Promise.all([
+                loadDispatchList(),
+                updateResourceStatus()
+            ]).then(() => {
+                showFlashMessage('✅ 배차 현황이 새로고침되었습니다.', 'success');
+                console.log('✅ 새로고침 완료!');
+            }).catch(error => {
+                console.error('새로고침 오류:', error);
+                showFlashMessage('❌ 새로고침 중 오류가 발생했습니다.', 'error');
+            }).finally(() => {
+                // 버튼 상태 복원
+                if (refreshBtn) {
+                    refreshBtn.disabled = false;
+                    refreshBtn.innerHTML = '🔄 새로고침';
+                }
+            });
+        }
+
+        // ✅ 전역 함수로 노출 (HTML에서 호출하기 위함)
+        window.viewDispatchDetail = viewDispatchDetail;
+        window.startDispatch = startDispatch;
+        window.viewDayDispatchDetail = viewDayDispatchDetail;
+        window.refreshDispatchData = refreshDispatchData;
+        window.exportDispatchData = exportDispatchData;
+
+        // ✅ 페이지 로드 시 초기화
+        document.addEventListener('DOMContentLoaded', function () {
+            console.log('🚐 배차 관리 시스템 초기화 시작...');
+            initialize();
+            console.log('✅ 배차 관리 시스템 초기화 완료!');
+        });
+
+        // ✅ 페이지 가시성 변경 시 데이터 새로고침 (탭 전환 등)
+        document.addEventListener('visibilitychange', function () {
+            if (!document.hidden) {
+                // 페이지가 다시 보일 때 데이터 새로고침
+                setTimeout(() => {
+                    if (!document.getElementById('regularTab').classList.contains('hidden')) {
+                        loadDispatchList();
+                    }
+                }, 1000);
+            }
+        });
+
+        // ✅ API 에러 핸들링 개선
+        function handleApiError(error, operation = '작업') {
+            console.error(`API Error in ${operation}:`, error);
+
+            let errorMessage = `${operation} 중 오류가 발생했습니다.`;
+
+            if (error.name === 'NetworkError' || !navigator.onLine) {
+                errorMessage = '네트워크 연결을 확인해주세요.';
+            } else if (error.message.includes('404')) {
+                errorMessage = 'API 엔드포인트를 찾을 수 없습니다.';
+            } else if (error.message.includes('500')) {
+                errorMessage = '서버 내부 오류가 발생했습니다.';
+            }
+
+            showFlashMessage(errorMessage, 'error');
+        }
+
+        // ✅ 실시간 상태 업데이트 (선택적 기능)
+        function startRealTimeUpdates() {
+            // 30초마다 배차 상황 자동 업데이트
+            setInterval(() => {
+                if (!document.hidden && !isLoading) {
+                    loadDispatchList();
+                }
+            }, 30000);
+        }
+
+        // 실시간 업데이트 시작 (페이지 로드 2분 후)
+        setTimeout(startRealTimeUpdates, 120000);
+
+        // ✅ 디버깅용 함수 (개발자 도구에서 사용)
+        function debugButtonStatus() {
+            console.log('🔍 버튼 상태 디버깅:');
+            console.log('- 새로고침 버튼:', document.getElementById('refreshDispatch') ? '✅ 존재' : '❌ 없음');
+            console.log('- 내보내기 버튼:', document.getElementById('exportDispatch') ? '✅ 존재' : '❌ 없음');
+            console.log('- currentDispatches 데이터:', currentDispatches ? `${currentDispatches.length}건` : '❌ 없음');
+            console.log('- 현재 날짜:', document.getElementById('dispatchDate').value);
+        }
+
+        // 전역에서 디버깅 함수 호출 가능하도록 노출
+        window.debugButtonStatus = debugButtonStatus;
+
+    </script>
+</body>
+
+</html>
