@@ -25,8 +25,7 @@ app.config.from_object(Config)    # ← 이거 추가
 basedir = os.path.abspath(os.path.dirname(__file__))
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'database.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'fallback-secret-key-for-development')git add app.py
-
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'fallback-secret-key-for-development')
 db.init_app(app)
 
 from models import User, Student, Class, TimeSlot, Vehicle, DispatchResult, Branch
