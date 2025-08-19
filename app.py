@@ -25,7 +25,7 @@ app.config.from_object(Config)    # ← 이거 추가
 basedir = os.path.abspath(os.path.dirname(__file__))
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'database.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'fallback-secret-key-for-development')
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'fallback-secret-key-for-development')git add app.py
 
 db.init_app(app)
 
@@ -110,11 +110,11 @@ def setup_initial_accounts():
         try:
             if not User.query.filter_by(email='master@joypool.com').first():
                 master_admin = User(email='master@joypool.com', name='마스터 관리자', role='master')
-                master_admin.set_password('1234')
+                master_admin.set_password(os.getenv('MASTER_PASSWORD', 'temp-password-change-immediately'))
                 db.session.add(master_admin)
             if not User.query.filter_by(email='driver@joypool.com').first():
                 test_driver = User(email='driver@joypool.com', name='테스트 기사', phone='010-1234-5678', role='driver')
-                test_driver.set_password('1234')
+                test_driver.set_password(os.getenv('DRIVER_PASSWORD', 'temp-password-change-immediately'))
                 db.session.add(test_driver)
             db.session.commit()
         except Exception as e:
